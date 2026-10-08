@@ -208,8 +208,12 @@ install_incus() {
 
     # 导入 Zabbly GPG 密钥
     mkdir -p /etc/apt/keyrings
+    chmod 0755 /etc/apt/keyrings
     curl -fsSL https://pkgs.zabbly.com/key.asc \
         | gpg --yes --dearmor -o /etc/apt/keyrings/zabbly.gpg
+    # APT verifies signatures as an unprivileged user, including when the
+    # installer runs with a restrictive umask to protect bootstrap credentials.
+    chmod 0644 /etc/apt/keyrings/zabbly.gpg
 
     # 添加 Zabbly APT 源（同时支持 Ubuntu 和 Debian）
     cat > /etc/apt/sources.list.d/zabbly-incus-stable.sources <<SRC
@@ -221,8 +225,9 @@ Components: main
 Architectures: ${ARCH}
 Signed-By: /etc/apt/keyrings/zabbly.gpg
 SRC
+    chmod 0644 /etc/apt/sources.list.d/zabbly-incus-stable.sources
 
-    apt-get update -qq 2>/dev/null
+    apt-get update -qq
     apt-get install -y -qq incus >/dev/null
     ensure_root_idmap || true
     systemctl enable --now incus.service incus.socket 2>/dev/null || systemctl enable --now incus 2>/dev/null || true

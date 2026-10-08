@@ -106,3 +106,27 @@ select_bridge_subnet
   const result = run(code, { BRIDGE_NAME: 'incusbr0', BRIDGE_SUBNET: '10.10.0.1/22' })
   assert.equal(result.status, 0, result.stderr)
 })
+
+test('APT can read the public signing key when installation uses umask 077', () => temp(dir => {
+  mkdirSync(join(dir, 'sources'))
+  const install = fn('server/templates/install/incus.sh', 'install_incus')
+    .replaceAll('/etc/apt/keyrings', '"$TEST_ROOT/keyrings"')
+    .replaceAll('/etc/apt/sources.list.d', '"$TEST_ROOT/sources"')
+  const code = stubs + `
+umask 077
+incus() { return 1; }
+curl() { printf 'public signing key'; }
+gpg() { cat > "\${@: -1}"; }
+ensure_root_idmap() { return 1; }
+wait_for_incus_daemon() { return 0; }
+systemctl() { :; }
+apt-get() {
+  [[ "$1" != update ]] && return 0
+  [[ $(stat -c %a "$TEST_ROOT/keyrings") == 755 ]] || return 71
+  [[ $(stat -c %a "$TEST_ROOT/keyrings/zabbly.gpg") == 644 ]] || return 72
+  [[ $(stat -c %a "$TEST_ROOT/sources/zabbly-incus-stable.sources") == 644 ]] || return 73
+}
+` + install + '\ninstall_incus'
+  const result = run(code, { TEST_ROOT: dir, OS_ID: 'ubuntu', OS_CODENAME: 'resolute', ARCH: 'amd64' })
+  assert.equal(result.status, 0, result.stderr)
+}))

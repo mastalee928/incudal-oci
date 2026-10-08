@@ -35,6 +35,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/db
 
+      - name: Test node installer
+        run: node --test scripts/test-node-installer.mjs
+
       - name: Lint
         run: pnpm lint
 

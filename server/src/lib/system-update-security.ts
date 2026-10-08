@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 
-export const DEFAULT_GITHUB_REPOSITORY = '1743986520/incudal'
+export const DEFAULT_GITHUB_REPOSITORY = 'mastalee928/incudal-oci'
 
 export interface PinnedUpdate {
   ref: string

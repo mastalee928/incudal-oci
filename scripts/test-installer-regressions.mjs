@@ -49,7 +49,7 @@ install() { printf 'install %s\\n' "$*" >> "$TRACE"; }
 mkdir() { printf 'mkdir %s\\n' "$*" >> "$TRACE"; }
 systemctl() { printf 'systemctl %s\\n' "$*" >> "$TRACE"; }
 ` + fn('scripts/install-panel.sh', 'ensure_service_directories') + '\n' + fn('scripts/install-panel.sh', 'create_service') + '\ncreate_service'
-  const result = bash(code, { TRACE: join(dir, 'trace'), SERVICE_FILE: join(dir, 'service'), SERVICE_NAME: 'incudal', INSTALL_DIR: dir, ENV_FILE: join(dir, '.env'), RUN_USER: 'incudal', GITHUB_REPO: '1743986520/incudal' })
+  const result = bash(code, { TRACE: join(dir, 'trace'), SERVICE_FILE: join(dir, 'service'), SERVICE_NAME: 'incudal', INSTALL_DIR: dir, ENV_FILE: join(dir, '.env'), RUN_USER: 'incudal', GITHUB_REPO: 'mastalee928/incudal-oci' })
   assert.equal(result.status, 0, result.stderr)
   const trace = readFileSync(join(dir, 'trace'), 'utf8')
   assert.ok(trace.indexOf('/var/lib/incudal/web-updates') < trace.indexOf('systemctl daemon-reload'))

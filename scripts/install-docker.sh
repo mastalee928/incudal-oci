@@ -15,14 +15,14 @@
 #   升级：  sudo bash install-docker.sh --upgrade
 #   卸载：  sudo bash install-docker.sh --uninstall
 #
-# 项目地址: https://github.com/1743986520/incudal
+# 项目地址: https://github.com/mastalee928/incudal-oci
 # ============================================================================
 set -euo pipefail
 
 # ========================== 全局常量 ==========================
 readonly SCRIPT_VERSION="1.0.0"
-readonly DEFAULT_GITHUB_REPO="1743986520/incudal"
-readonly DEFAULT_UPDATE_REF="deeb7d65b1d2a1df461373d48090d77b2b2e4741"
+readonly DEFAULT_GITHUB_REPO="mastalee928/incudal-oci"
+readonly DEFAULT_UPDATE_REF="${INCUDAL_UPDATE_REF:-deeb7d65b1d2a1df461373d48090d77b2b2e4741}"
 readonly GITHUB_REPO="${INCUDAL_GITHUB_REPO:-${INCUDAL_UPDATE_SOURCE:-$DEFAULT_GITHUB_REPO}}"
 readonly DOCKER_IMAGE="ghcr.io/${GITHUB_REPO}"
 readonly INSTALL_DIR="${INCUDAL_INSTALL_DIR:-/opt/incudal}"
@@ -369,7 +369,7 @@ generate_compose() {
     cat > "$COMPOSE_FILE" << 'COMPOSEFILE'
 services:
   app:
-    image: ${INCUDAL_IMAGE:-ghcr.io/1743986520/incudal:latest}
+    image: ${INCUDAL_IMAGE:-ghcr.io/mastalee928/incudal-oci:latest}
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
     environment:
@@ -604,7 +604,7 @@ show_result() {
     echo -e "  ${DIM}重启服务${NC}     docker compose -f ${COMPOSE_FILE} restart" >&2
     echo -e "  ${DIM}停止服务${NC}     docker compose -f ${COMPOSE_FILE} down" >&2
     echo -e "  ${DIM}更新镜像${NC}     sudo bash $0 --upgrade" >&2
-    echo -e "  ${DIM}远程更新${NC}     curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/${DEFAULT_UPDATE_REF}/scripts/remote-update.sh | sudo bash -s -- --ref ${DEFAULT_UPDATE_REF}" >&2
+    echo -e "  ${DIM}远程更新${NC}     curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/${DEFAULT_UPDATE_REF}/scripts/remote-update.sh | sudo bash -s -- --source https://github.com/${GITHUB_REPO} --ref ${DEFAULT_UPDATE_REF}" >&2
     divider
     echo "" >&2
 

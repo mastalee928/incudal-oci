@@ -103,6 +103,8 @@ agent/dist/manifest.json
 
 `agent/dist` 是本地临时构建目录，不再纳入 Git。正式发布由 GitHub Actions `Agent Build & Release` 完成。
 
+本仓库需要独立构建发布 Agent 附件。同步源码和 Git 标签不会复制原仓库的 Release 二进制；已有标签也不代表本仓库已有可下载的 Agent。
+
 推送中只要 `agent/VERSION` 发生变化，Actions 会读取该版本号，构建并发布 GitHub Release：
 
 ```text
@@ -114,7 +116,7 @@ assets:
 
 面板运行时不会读取本地 `agent/dist`。它会从 GitHub Release 查询最新 Agent 版本，动态生成 `/api/agent/manifest.json`，并通过 `/api/agent/binary/*` 代理下载对应 Release 资产。
 
-默认 GitHub Release 仓库为 `1743986520/incudal`。如果部署到 fork 或私有仓库，可设置仓库地址或 `owner/repo`：
+默认 GitHub Release 仓库为 `mastalee928/incudal-oci`。如果部署到 fork 或私有仓库，可设置仓库地址或 `owner/repo`：
 
 ```bash
 INCUDAL_AGENT_RELEASE_URL="https://github.com/owner/repo"

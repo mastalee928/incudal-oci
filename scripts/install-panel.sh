@@ -14,14 +14,14 @@
 #   升级：  sudo bash install-panel.sh --upgrade
 #   卸载：  sudo bash install-panel.sh --uninstall
 #
-# 项目地址: https://github.com/1743986520/incudal
+# 项目地址: https://github.com/mastalee928/incudal-oci
 # ============================================================================
 set -euo pipefail
 
 # ========================== 全局常量 ==========================
 readonly SCRIPT_VERSION="3.0.0"
-readonly DEFAULT_GITHUB_REPO="1743986520/incudal"
-readonly DEFAULT_UPDATE_REF="deeb7d65b1d2a1df461373d48090d77b2b2e4741"
+readonly DEFAULT_GITHUB_REPO="mastalee928/incudal-oci"
+readonly DEFAULT_UPDATE_REF="${INCUDAL_UPDATE_REF:-deeb7d65b1d2a1df461373d48090d77b2b2e4741}"
 readonly GITHUB_REPO="${INCUDAL_GITHUB_REPO:-${INCUDAL_UPDATE_SOURCE:-$DEFAULT_GITHUB_REPO}}"
 readonly INSTALL_DIR="${INCUDAL_INSTALL_DIR:-/opt/incudal}"
 readonly SERVICE_NAME="incudal"
@@ -1223,7 +1223,7 @@ show_result() {
     echo -e "  重启服务  :  ${CYAN}systemctl restart ${SERVICE_NAME}${NC}"
     echo -e "  查看状态  :  ${CYAN}systemctl status ${SERVICE_NAME}${NC}"
     echo -e "  查看日志  :  ${CYAN}journalctl -u ${SERVICE_NAME} -f${NC}"
-    echo -e "  远程更新  :  ${CYAN}curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/${DEFAULT_UPDATE_REF}/scripts/remote-update.sh | sudo bash -s -- --ref ${DEFAULT_UPDATE_REF}${NC}"
+    echo -e "  远程更新  :  ${CYAN}curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/${DEFAULT_UPDATE_REF}/scripts/remote-update.sh | sudo bash -s -- --source https://github.com/${GITHUB_REPO} --ref ${DEFAULT_UPDATE_REF}${NC}"
     echo ""
     divider
 }

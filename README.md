@@ -2,6 +2,8 @@
 
 Incudal 是一个基于 Incus 的容器与 KVM 虚拟机管理、销售和托管平台，包含用户面板、管理后台、节点 Agent、计费系统、NAT 端口映射、通知系统及节点安装工具。
 
+本仓库由 [mastalee928/incudal-oci](https://github.com/mastalee928/incudal-oci) 独立维护，保留完整源码和 Git 历史。部署、更新和 Agent 下载默认使用本仓库，原项目版权和 BSD 3-Clause 许可声明保留在 `LICENSE` 中。
+
 > 本分支包含生产环境持续维护的安全、节点兼容性、计费与界面改进。完整修改原因和部署说明见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 主要功能
@@ -81,12 +83,14 @@ Incudal 是一个基于 Incus 的容器与 KVM 虚拟机管理、销售和托管
 ## 快速部署
 
 ```bash
-git clone https://github.com/1743986520/incudal.git
-cd incudal
+git clone https://github.com/mastalee928/incudal-oci.git
+cd incudal-oci
 cp .env.example .env
 bash scripts/init-env.sh
 docker compose up -d --build
 ```
+
+上述命令从本仓库源码构建面板镜像。Git 同步不会复制 GitHub Releases 附件或 GHCR 镜像；预构建部署需先在本仓库发布对应产物，节点接入需先按 [Agent 发布说明](./agent/README.md) 发布本仓库的 Agent。
 
 默认仅监听 `127.0.0.1:3000`，生产环境应通过受信任反向代理提供 HTTPS。启动前至少确认 `POSTGRES_PASSWORD`、`JWT_SECRET`、`ENCRYPTION_KEY`、`ADMIN_PASSWORD`、`FRONTEND_URL` 和 `SITE_URL` 已正确配置。不要提交生产环境 `.env`。
 
@@ -107,6 +111,15 @@ pnpm dev
 
 ## 升级现有部署
 
+通过上述 Docker Compose 源码方式部署的面板，在仓库目录中更新：
+
+```bash
+git pull --ff-only origin main
+docker compose up -d --build
+```
+
+直接使用 Node.js 运行的部署：
+
 ```bash
 pnpm install
 cd server
@@ -120,14 +133,13 @@ pnpm build
 
 ### 远程更新
 
-已部署的面板可以直接从 GitHub 仓库下载最新更新脚本并执行升级。默认来源为本仓库，也可以通过 `--source` 指定其他 GitHub 仓库：
+使用预构建镜像或产物包的部署，在本仓库已发布对应版本后，可以运行远程更新脚本。先在本仓库的本地副本中拉取更新，再指定本次提交，确保下载的安装脚本来自确定的版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/1743986520/incudal/main/scripts/remote-update.sh | sudo bash
-
-# 从指定仓库更新
-curl -fsSL https://raw.githubusercontent.com/1743986520/incudal/main/scripts/remote-update.sh \
-  | sudo bash -s -- --source https://github.com/owner/repo
+git pull --ff-only origin main
+sudo bash scripts/remote-update.sh \
+  --source https://github.com/mastalee928/incudal-oci \
+  --ref "$(git rev-parse HEAD)"
 ```
 
 脚本会自动识别 Docker Compose 与 systemd 产物包部署，并在升级前保留现有 `.env`、证书和数据库数据。

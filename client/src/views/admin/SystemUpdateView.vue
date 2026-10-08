@@ -15,7 +15,7 @@ import { translateError } from '@/utils/errorHandler'
 const { t, locale } = useI18n()
 const toast = useToast()
 
-const DEFAULT_SOURCE = 'https://github.com/1743986520/incudal'
+const DEFAULT_SOURCE = 'https://github.com/mastalee928/incudal-oci'
 const source = ref(localStorage.getItem('incudal.update.source') || DEFAULT_SOURCE)
 const mode = ref<SystemUpdateMode>('auto')
 const loading = ref(true)

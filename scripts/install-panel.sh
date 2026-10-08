@@ -21,7 +21,7 @@ set -euo pipefail
 # ========================== 全局常量 ==========================
 readonly SCRIPT_VERSION="3.0.0"
 readonly DEFAULT_GITHUB_REPO="mastalee928/incudal-oci"
-readonly DEFAULT_UPDATE_REF="${INCUDAL_UPDATE_REF:-deeb7d65b1d2a1df461373d48090d77b2b2e4741}"
+readonly DEFAULT_UPDATE_REF="${INCUDAL_UPDATE_REF:-269a57329bb8bd45c4d25c2bad100716964edf7d}"
 readonly GITHUB_REPO="${INCUDAL_GITHUB_REPO:-${INCUDAL_UPDATE_SOURCE:-$DEFAULT_GITHUB_REPO}}"
 readonly INSTALL_DIR="${INCUDAL_INSTALL_DIR:-/opt/incudal}"
 readonly SERVICE_NAME="incudal"

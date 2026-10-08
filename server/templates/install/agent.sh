@@ -56,7 +56,13 @@ import_cert() {
         error "无法读取面板证书指纹"
         return 1
     fi
-    trusted=$(incus config trust list --format csv -c F) || {
+    # The full-fingerprint CSV shorthand differs between Incus releases.
+    # JSON exposes the complete fingerprint on both Alpine and Zabbly builds.
+    trusted=$(incus config trust list --format json | python3 -c '
+import json, sys
+for entry in json.load(sys.stdin):
+    print(entry.get("fingerprint", "").replace(":", "").lower())
+') || {
         rm -f "$cert_file"
         return 1
     }
@@ -331,4 +337,3 @@ manage_incudal_agent() {
         esac
     done
 }
-

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -69,14 +69,20 @@ test('certificate import uses exact certificate fingerprint, not a panel name', 
   const code = stubs + `
 curl() { cp "$CERT" "\${@: -1}"; }
 incus() {
-  if [[ "$1 $2 $3" == 'config trust list' ]]; then printf '%s\\n' "$TRUSTED";
+  if [[ "$1 $2 $3" == 'config trust list' ]]; then
+    [[ "$4 $5" == '--format json' && $# == 5 ]] || return 23
+    printf '%s\\n' "$TRUSTED"
   elif [[ "$1 $2 $3" == 'config trust add-certificate' ]]; then printf 'added\\n' >> "$TRACE";
   else return 1; fi
 }
 ` + fn('server/templates/install/agent.sh', 'import_cert') + '\nimport_cert'
-  for (const [trusted, added] of [['panel', true], [fingerprint, false]]) {
+  for (const [trusted, added] of [
+    [[{ name: 'panel', fingerprint: '0'.repeat(64) }], true],
+    [[{ name: 'panel', fingerprint }], false],
+    [[], true]
+  ]) {
     const trace = join(dir, 'trace'); writeFileSync(trace, '')
-    const result = run(code, { CERT: cert, TRUSTED: trusted, TRACE: trace, PANEL_URL: 'https://panel.example.test', TOKEN: 'test-token' })
+    const result = run(code, { CERT: cert, TRUSTED: JSON.stringify(trusted), TRACE: trace, PANEL_URL: 'https://panel.example.test', TOKEN: 'test-token' })
     assert.equal(result.status, 0, result.stderr)
     assert.equal(readFileSync(trace, 'utf8').includes('added'), added)
   }
@@ -130,3 +136,103 @@ apt-get() {
   const result = run(code, { TEST_ROOT: dir, OS_ID: 'ubuntu', OS_CODENAME: 'resolute', ARCH: 'amd64' })
   assert.equal(result.status, 0, result.stderr)
 }))
+
+const ociNetworkSource = source('scripts/configure-oci-node-network.sh')
+const networkEnv = {
+  control_ip: '10.253.240.1', management_interface: 'incudal-mgmt',
+  api_port: '8443', bridge: 'incusbr0', bridge_cidr: '10.10.0.1/22',
+  uplink: 'eth0', dedicated_ip: '10.10.0.2', bind_ip: '10.0.0.116', client_ports: ''
+}
+
+test('dedicated forwarding requires a separate management interface and valid IPv4 addresses', () => {
+  const validation = ociNetworkSource.slice(
+    ociNetworkSource.indexOf('[[ -z "$management_interface"'),
+    ociNetworkSource.indexOf('\nfor command in ip iptables ip6tables;')
+  )
+  assert.equal(run(validation, networkEnv).status, 0)
+  for (const invalid of [
+    { management_interface: '' }, { management_interface: 'wg0;id' },
+    { bind_ip: '' }, { bind_ip: '127.0.0.1' },
+    { dedicated_ip: 'not-an-address' }, { client_ports: '10000:10099' }
+  ]) {
+    assert.notEqual(run(validation, { ...networkEnv, ...invalid }).status, 0, JSON.stringify(invalid))
+  }
+})
+
+for (const dedicated of [true, false]) {
+  test(`OCI firewall preserves host rules and isolates guests, dedicated=${dedicated}`, () => temp(dir => {
+    const trace = join(dir, 'trace')
+    const code = `
+iptables() {
+  printf 'v4 %s\\n' "$*" >> "$TRACE"
+  case " $* " in *' -C '*|*' -S INCUDAL_OCI_NAT '*) return 1 ;; esac
+  return 0
+}
+ip6tables() {
+  printf 'v6 %s\\n' "$*" >> "$TRACE"
+  case " $* " in *' -C '*) return 1 ;; esac
+  return 0
+}
+` + fn('scripts/configure-oci-node-network.sh', 'configure_oci_rules') + '\nconfigure_oci_rules'
+    const result = run(code, {
+      ...networkEnv, TRACE: trace,
+      ...(dedicated ? {} : { dedicated_ip: '', bind_ip: '', management_interface: '', control_ip: '203.0.113.10', client_ports: '10000:10099' })
+    })
+    assert.equal(result.status, 0, result.stderr)
+    const calls = readFileSync(trace, 'utf8')
+    assert.doesNotMatch(calls, / -[FX] (INPUT|OUTPUT|FORWARD|InstanceServices)(?: |$)/m)
+    assert.doesNotMatch(calls, / -P /)
+    assert.match(calls, /-A INCUDAL_OCI_IN -i incusbr0 -j REJECT/)
+    assert.match(calls, /v6 .* -A INCUDAL_OCI_IN -i incusbr0 -j REJECT/)
+    assert.ok(calls.indexOf('-d 169.254.0.0/16 -j REJECT') < calls.indexOf('-s 10.10.0.1/22 -o eth0 -j ACCEPT'))
+    const forwarding = calls.split('\n').filter(line => line.includes('-t nat -A INCUDAL_OCI_NAT'))
+    assert.equal(forwarding.length, dedicated ? 2 : 0)
+    if (dedicated) {
+      for (const protocol of ['tcp', 'udp']) {
+        assert.ok(forwarding.some(line => line.endsWith(`-i eth0 -d 10.0.0.116/32 -p ${protocol} -j DNAT --to-destination 10.10.0.2`)))
+      }
+      assert.match(calls, /-s 10.253.240.1\/32 -i incudal-mgmt -p tcp --dport 8443 -j ACCEPT/)
+      assert.ok(calls.indexOf('-d 10.0.0.0/8 -j REJECT') < calls.indexOf('-s 10.10.0.1/22 -o eth0 -j ACCEPT'))
+    } else {
+      assert.match(calls, /--dport 10000:10099 -j ACCEPT/)
+    }
+  }))
+}
+
+for (const initSystem of ['openrc', 'systemd']) {
+  test(`OCI network persistence supports ${initSystem} under umask 077`, () => temp(dir => {
+    mkdirSync(join(dir, 'init.d'))
+    mkdirSync(join(dir, 'systemd'))
+    const testScript = join(dir, 'source-network.sh')
+    writeFileSync(testScript, '#!/bin/sh\nexit 0\n')
+    const start = ociNetworkSource.indexOf('persist_oci_network() {')
+    const persistence = ociNetworkSource.slice(start, ociNetworkSource.indexOf('\nconfigure_oci_rules\n', start))
+      .replaceAll('/usr/local/sbin/incudal-oci-network', '"$TEST_ROOT/local/sbin/incudal-oci-network"')
+      .replaceAll('"$0"', '"$TEST_SCRIPT"')
+      .replaceAll('/etc/init.d/incudal-oci-network', '"$TEST_ROOT/init.d/incudal-oci-network"')
+      .replaceAll('/etc/systemd/system/incudal-oci-network.service', '"$TEST_ROOT/systemd/incudal-oci-network.service"')
+    const code = `
+umask 077
+rc-update() { printf 'rc-update %s\\n' "$*" >> "$TRACE"; }
+rc-service() { printf 'rc-service %s\\n' "$*" >> "$TRACE"; }
+systemctl() { printf 'systemctl %s\\n' "$*" >> "$TRACE"; }
+` + persistence + '\npersist_oci_network'
+    const result = run(code, { ...networkEnv, init_system: initSystem, TEST_ROOT: dir, TEST_SCRIPT: testScript, TRACE: join(dir, 'trace') })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(readFileSync(join(dir, 'local/sbin/incudal-oci-network'), 'utf8'), readFileSync(testScript, 'utf8'))
+    const path = join(dir, initSystem === 'openrc' ? 'init.d/incudal-oci-network' : 'systemd/incudal-oci-network.service')
+    const service = readFileSync(path, 'utf8')
+    assert.match(service, /--management-interface incudal-mgmt --dedicated-ip 10.10.0.2 --bind-ip 10.0.0.116/)
+    assert.doesNotMatch(service, /--persist/)
+    assert.equal(statSync(path).mode & 0o777, initSystem === 'openrc' ? 0o755 : 0o644)
+    if (initSystem === 'openrc') {
+      assert.match(service, /need net incusd/)
+      assert.match(service, /after firewall iptables ip6tables wg-quick.incudal-mgmt/)
+      assert.equal(spawnSync('sh', ['-n', path], { encoding: 'utf8' }).status, 0)
+      assert.match(readFileSync(join(dir, 'trace'), 'utf8'), /rc-update add incudal-oci-network default/)
+    } else {
+      assert.match(service, /After=.*wg-quick@incudal-mgmt.service/)
+      assert.match(readFileSync(join(dir, 'trace'), 'utf8'), /systemctl enable --now incudal-oci-network.service/)
+    }
+  }))
+}

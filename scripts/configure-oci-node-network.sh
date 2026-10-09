@@ -214,19 +214,20 @@ depend() {
     before incudal-agent
 }
 
-start_pre() {
-    local attempt=0
-    while ! ip -o -4 addr show dev ${bridge} 2>/dev/null | grep -q ' inet '; do
-        [ "\$attempt" -lt 30 ] || return 1
-        sleep 1
-        attempt=\$((attempt + 1))
-    done
-}
-
 start() {
     ebegin "Configuring Incudal OCI networking"
-    ${target} ${arguments}
-    eend \$?
+    # DHCP, the Incus bridge, and the management route can become ready later
+    # than their services. Retry the complete validated, idempotent setup.
+    local attempt=0
+    while ! ${target} ${arguments}; do
+        attempt=\$((attempt + 1))
+        if [ "\$attempt" -ge 60 ]; then
+            eend 1
+            return 1
+        fi
+        sleep 2
+    done
+    eend 0
 }
 EOF
         chmod 0755 /etc/init.d/incudal-oci-network

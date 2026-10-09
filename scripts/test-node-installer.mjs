@@ -250,6 +250,21 @@ systemctl() { printf 'systemctl %s\\n' "$*" >> "$TRACE"; }
       assert.match(service, /after firewall iptables ip6tables wg-quick.incudal-mgmt/)
       assert.equal(spawnSync('sh', ['-n', path], { encoding: 'utf8' }).status, 0)
       assert.match(readFileSync(join(dir, 'trace'), 'utf8'), /rc-update add incudal-oci-network default/)
+      const attempts = join(dir, 'attempts')
+      writeFileSync(join(dir, 'local/sbin/incudal-oci-network'), `#!/bin/sh
+attempt=$(cat "$TEST_ATTEMPTS")
+attempt=$((attempt + 1))
+printf '%s\\n' "$attempt" > "$TEST_ATTEMPTS"
+[ "$attempt" -ge "$TEST_READY_AFTER" ]
+`, { mode: 0o755 })
+      for (const [readyAfter, status, calls] of [[3, 0, 3], [100, 1, 60]]) {
+        writeFileSync(attempts, '0')
+        const startup = run('ebegin() { :; }; eend() { return "$1"; }; sleep() { :; };\n. "$SERVICE"\nif start; then exit 0; else exit $?; fi', {
+          SERVICE: path, TEST_ATTEMPTS: attempts, TEST_READY_AFTER: String(readyAfter)
+        })
+        assert.equal(startup.status, status, startup.stderr)
+        assert.equal(Number(readFileSync(attempts, 'utf8')), calls)
+      }
     } else {
       assert.match(service, /After=.*wg-quick@incudal-mgmt.service/)
       assert.match(readFileSync(join(dir, 'trace'), 'utf8'), /systemctl enable --now incudal-oci-network.service/)

@@ -397,6 +397,7 @@ onActivated(() => {
         <h1 class="page-title">{{ t('resources.hosts.title') }}</h1>
         <p class="page-description">{{ t('resources.hosts.description') }}</p>
       </div>
+      <RouterLink v-if="isAdmin" to="/admin/host-onboarding" class="btn-secondary whitespace-nowrap">{{ t('onboarding.title') }}</RouterLink>
     </div>
 
     <!-- 工具栏 -->

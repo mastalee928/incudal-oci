@@ -248,6 +248,18 @@ do_uninstall() {
     rm -f /usr/local/sbin/incudal-pps-guard /etc/incudal/pps-guard.conf
     info "已清理: 每实例 PPS 防护"
 
+    if command -v systemctl &>/dev/null; then
+        systemctl disable --now incudal-port-protocol.service 2>/dev/null || true
+        rm -f /etc/systemd/system/incudal-port-protocol.service
+        systemctl daemon-reload 2>/dev/null || true
+    elif command -v rc-service &>/dev/null; then
+        rc-service incudal-port-protocol stop 2>/dev/null || true
+        rc-update del incudal-port-protocol boot 2>/dev/null || true
+        rm -f /etc/init.d/incudal-port-protocol
+    fi
+    nft delete table inet incudal_ingress_protocol 2>/dev/null || true
+    rm -f /var/lib/incudal-agent/port-protocol.nft
+
     # 2. 清理 WARP 和 IPv6 路由守护神
     if ip link show wg0 >/dev/null 2>&1 || [[ -f /usr/local/bin/wgcf ]] || [[ -d /etc/wireguard ]]; then
         systemctl stop wg-quick@wg0 2>/dev/null || true
@@ -367,4 +379,3 @@ do_uninstall() {
     rm -f incudal-install.sh *.install.sh install.sh incudal.sh 2>/dev/null || true
     rm -f /root/install.sh /root/incudal.sh 2>/dev/null || true
 }
-

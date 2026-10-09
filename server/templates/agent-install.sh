@@ -427,6 +427,20 @@ request_timeout_seconds: ${REQUEST_TIMEOUT}
 EOF_CONFIG
 
 if [ "${INIT_SYSTEM}" = "openrc" ]; then
+write_file "/etc/init.d/incudal-port-protocol" 0755 root:root <<EOF_INGRESS
+#!/sbin/openrc-run
+description="Restore Incudal public ingress protocol"
+depend() {
+  need localmount
+  after firewall nftables
+  before incus incusd incudal-agent
+}
+start() {
+  ebegin "Restoring Incudal ingress protocol"
+  ${BIN_PATH} -restore-port-protocol
+  eend \$?
+}
+EOF_INGRESS
 write_file "${SERVICE_FILE}" 0755 root:root <<EOF_SERVICE
 #!/sbin/openrc-run
 name="Incudal Host Agent"
@@ -447,6 +461,22 @@ depend() {
 }
 EOF_SERVICE
 else
+write_file "/etc/systemd/system/incudal-port-protocol.service" 0644 root:root <<EOF_INGRESS
+[Unit]
+Description=Restore Incudal public ingress protocol
+DefaultDependencies=no
+After=local-fs.target nftables.service
+Before=network-pre.target incus.service incus.socket
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=${BIN_PATH} -restore-port-protocol
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF_INGRESS
 write_file "${SERVICE_FILE}" 0644 root:root <<EOF_SERVICE
 [Unit]
 Description=Incudal Host Agent
@@ -475,11 +505,13 @@ fi
 
 "${BIN_PATH}" -config "${CONFIG_FILE}" -once
 if [ "${INIT_SYSTEM}" = "openrc" ]; then
+  rc-update add incudal-port-protocol boot >/dev/null 2>&1 || true
   rc-update add "${SERVICE_NAME}" default >/dev/null 2>&1 || true
   rc-service "${SERVICE_NAME}" restart || rc-service "${SERVICE_NAME}" start
   rc-service "${SERVICE_NAME}" status
 else
   systemctl daemon-reload
+  systemctl enable incudal-port-protocol.service
   systemctl enable "${SERVICE_NAME}"
   # 已安装场景下 enable --now 不会重启旧进程；restart 确保升级后立即使用最新二进制和配置。
   systemctl restart "${SERVICE_NAME}"

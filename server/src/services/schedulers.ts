@@ -40,6 +40,9 @@ export async function startSchedulers(): Promise<void> {
   startInstanceTaskWorker()
   console.log('⚙️ 实例操作任务调度器已启动')
 
+  const { startHostOnboardingWorker } = await import('../workers/hostOnboardingWorker.js')
+  startHostOnboardingWorker()
+
   // 启动宿主机通知邮件队列 Worker
   const {
     cleanupStaleHostNotificationEmailTasks,
@@ -332,6 +335,9 @@ export async function startSchedulers(): Promise<void> {
  * 停止调度器（优雅关闭时调用）
  */
 export async function stopSchedulers(): Promise<void> {
+  const { stopHostOnboardingWorker } = await import('../workers/hostOnboardingWorker.js')
+  await stopHostOnboardingWorker()
+
   const { stopSessionCleanup } = await import('../lib/terminal-proxy.js')
   stopSessionCleanup()
 

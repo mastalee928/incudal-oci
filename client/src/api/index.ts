@@ -1,5 +1,7 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import type { HostPortProtocolState, PortProtocol, PortProtocolState } from '@/types/api'
+import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest } from '@/types/api'
 
 // Keep bearer tokens in memory only. Session restoration uses the HttpOnly
 // refresh-token cookie, so XSS cannot recover a persisted access token.
@@ -1330,7 +1332,18 @@ const api = {
   },
 
   // 主机管理
+  hostOnboarding: {
+    inventory: (params: HostInventoryQuery = {}): Promise<HostInventoryResponse> => http.get('/host-onboarding/inventory', { params }),
+    updateGroups: (data: UpdateHostGroupsRequest): Promise<{ success: boolean; updated: number }> => http.patch('/host-onboarding/inventory/groups', data),
+    gateway: (): Promise<OnboardingGatewayStatus> => http.get('/host-onboarding/gateway'),
+    list: (params: { page?: number; search?: string } = {}): Promise<OnboardingListResponse> => http.get('/host-onboarding', { params }),
+    create: (data: CreateOnboardingRequest): Promise<{ id: string }> => http.post('/host-onboarding', data),
+    retry: (id: string, credentials: OnboardingCredentials): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/retry`, credentials),
+    cancel: (id: string): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/cancel`)
+  },
   hosts: {
+    getPortProtocol: (id: number): Promise<HostPortProtocolState> => http.get(`/hosts/${id}/port-protocol`),
+    setPortProtocol: (id: number, protocol: PortProtocol): Promise<PortProtocolState> => http.patch(`/hosts/${id}/port-protocol`, { protocol }),
     list: (params: HostListParams = {}): Promise<HostListResponse> =>
       http.get('/hosts', { params }),
     // 管理员专用：获取官方自营节点（所有管理员账号名下的节点）

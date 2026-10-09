@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"incudal-agent/internal/config"
+	"incudal-agent/internal/ingress"
 	"incudal-agent/internal/protocol"
 )
 
@@ -31,6 +32,7 @@ type HeartbeatResult struct {
 	LatencyMs       int64
 	Monitoring      *MonitoringInstruction
 	NetworkPolicies *NetworkPolicyBundle
+	PortProtocol    *ingress.Instruction
 }
 
 type MonitoringInstruction struct {
@@ -73,6 +75,7 @@ type heartbeatResponse struct {
 	Upgrade         *UpgradeInstruction    `json:"upgrade"`
 	Monitoring      *MonitoringInstruction `json:"monitoring"`
 	NetworkPolicies *NetworkPolicyBundle   `json:"networkPolicies"`
+	PortProtocol    *ingress.Instruction   `json:"portProtocol"`
 }
 
 func New(cfg config.Config) *Client {
@@ -139,6 +142,7 @@ func (client *Client) Heartbeat(ctx context.Context, payload map[string]any) (He
 		result.Upgrade = parsedResponse.Upgrade
 		result.Monitoring = parsedResponse.Monitoring
 		result.NetworkPolicies = parsedResponse.NetworkPolicies
+		result.PortProtocol = parsedResponse.PortProtocol
 	}
 
 	var parsed map[string]any

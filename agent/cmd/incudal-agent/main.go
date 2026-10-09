@@ -12,6 +12,7 @@ import (
 
 	"incudal-agent/internal/audit"
 	"incudal-agent/internal/config"
+	"incudal-agent/internal/ingress"
 	"incudal-agent/internal/panel"
 	"incudal-agent/internal/policy"
 	"incudal-agent/internal/pps"
@@ -22,22 +23,30 @@ import (
 var version = "dev"
 var auditScanner audit.Scanner
 var lastPolicyStatus *policy.Status
+var lastPortProtocolStatus *ingress.Status
 var pendingAuditSnapshots []any
 var policyRetryRevision string
 var policyRetryDelay time.Duration
 var policyNextRetryAt time.Time
 
 const (
-	initialPolicyRetryDelay = 5 * time.Second
-	maxPolicyRetryDelay     = 5 * time.Minute
-	policyApplyTimeout      = 45 * time.Second
+	initialPolicyRetryDelay       = 5 * time.Second
+	maxPolicyRetryDelay           = 5 * time.Minute
+	policyApplyTimeout            = 45 * time.Second
 	maxAuditSnapshotsPerHeartbeat = 32
 )
 
 func main() {
 	configPath := flag.String("config", "/etc/incudal-agent/config.yaml", "agent config file")
 	once := flag.Bool("once", false, "send one heartbeat and exit")
+	restoreIngress := flag.Bool("restore-port-protocol", false, "restore saved ingress policy before networking starts")
 	flag.Parse()
+	if *restoreIngress {
+		if err := ingress.Restore(context.Background()); err != nil {
+			log.Fatalf("restore ingress policy: %v", err)
+		}
+		return
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -46,6 +55,9 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if err := ingress.Restore(ctx); err != nil {
+		log.Fatalf("restore ingress policy: %v", err)
+	}
 
 	syncPPS(ctx, true)
 
@@ -100,6 +112,9 @@ func syncPPS(ctx context.Context, logSuccess bool) {
 
 func sendHeartbeat(ctx context.Context, client *panel.Client, heartbeatIntervalSeconds int) (panel.HeartbeatResult, error) {
 	payload := report.HeartbeatPayload(version, heartbeatIntervalSeconds)
+	if lastPortProtocolStatus != nil {
+		payload["portProtocolStatus"] = *lastPortProtocolStatus
+	}
 	if lastPolicyStatus != nil {
 		payload["networkPolicyStatus"] = policy.StatusMap(*lastPolicyStatus)
 	}
@@ -136,6 +151,17 @@ func sendHeartbeat(ctx context.Context, client *panel.Client, heartbeatIntervalS
 }
 
 func processInstructions(ctx context.Context, cfg config.Config, result panel.HeartbeatResult) {
+	if instruction := result.PortProtocol; instruction != nil {
+		// Reconcile on every heartbeat: bridges may be created after the choice
+		// was saved, and a firewall reload may have removed our table.
+		applyCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		status := ingress.Apply(applyCtx, *instruction)
+		cancel()
+		lastPortProtocolStatus = &status
+		if !status.Applied {
+			log.Printf("ingress policy failed: %s", status.Error)
+		}
+	}
 	if result.NetworkPolicies != nil && shouldApplyNetworkPolicies(result.NetworkPolicies.Revision) {
 		applyCtx, cancel := context.WithTimeout(ctx, policyApplyTimeout)
 		status := policy.Apply(applyCtx, *result.NetworkPolicies, cfg.BridgeInterface)

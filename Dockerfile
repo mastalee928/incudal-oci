@@ -69,6 +69,7 @@ COPY server/package.json ./server/
 COPY server/prisma.config.ts ./server/
 COPY server/prisma ./server/prisma
 COPY server/templates ./server/templates
+COPY scripts/configure-oci-node-network.sh ./scripts/configure-oci-node-network.sh
 COPY server/scripts ./server/scripts
 COPY server/src ./server/src
 COPY package.json pnpm-workspace.yaml ./

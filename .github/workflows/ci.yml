@@ -10,6 +10,20 @@ jobs:
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: incudal_test_onboarding
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fixture -d incudal_test_onboarding"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -38,6 +52,20 @@ jobs:
       - name: Test node installer
         run: node --test scripts/test-node-installer.mjs
 
+      - name: Apply test database migrations
+        run: pnpm --filter server exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/incudal_test_onboarding
+
+      - name: Test host onboarding and inventory
+        run: pnpm --filter server exec tsx --test scripts/test-host-onboarding.ts
+        env:
+          ONBOARDING_TEST_DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/incudal_test_onboarding
+          DB_IDLE_TIMEOUT: '1000'
+
+      - name: Test restricted onboarding gateway
+        run: python3 scripts/test-onboarding-gateway.py
+
       - name: Lint
         run: pnpm lint
 
@@ -56,6 +84,13 @@ jobs:
       - name: Test Agent
         working-directory: agent
         run: go test ./...
+
+      - name: Test IPv4 and IPv6 ingress rules
+        working-directory: agent
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nftables iproute2
+          sudo env "PATH=$PATH" INCUDAL_INGRESS_NETNS_TEST=1 go test -count=1 -run TestIngressNetworkNamespaces -v ./internal/ingress
 
   build:
     name: Build

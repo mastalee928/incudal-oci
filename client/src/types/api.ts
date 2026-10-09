@@ -484,6 +484,7 @@ export interface Instance {
   hostCountryCode?: string
   natPublicIp?: string | null
   hostNatPublicIpv6?: string | null
+  portProtocol?: PortProtocolState
   hostIpv6Gateway?: string | null
   hostIpAddress?: string | null
   userAvatarBadgeId?: string | null
@@ -740,6 +741,126 @@ export interface UpdateSnapshotPolicyRequest {
 }
 
 // ==================== 节点相关 ====================
+
+export type PortProtocol = 'tcp' | 'tcp_udp'
+export interface PortProtocolState {
+  requested: PortProtocol
+  applied: PortProtocol
+  status: 'applied' | 'pending' | 'failed'
+}
+export interface HostPortProtocolState extends PortProtocolState {
+  supported: boolean
+  error: string | null
+  lastSeenAt: string | null
+}
+
+export interface OnboardingCredentials {
+  password?: string
+  privateKey?: string
+}
+export interface OnboardingInputNode extends OnboardingCredentials {
+  name: string
+  publicIp: string
+  sshPort?: number
+  sshFingerprint?: string
+  machineGroup?: string
+  regionGroup?: string
+  countryCode?: string
+}
+export interface OnboardingDefaults {
+  countryCode: string
+  machineGroup?: string
+  regionGroup?: string
+  storageSize: number
+  cpuAllowanceMax: number
+  memoryMax: number
+  portProtocol: PortProtocol
+}
+export interface CreateOnboardingRequest {
+  requestId: string
+  name: string
+  accountLabel: string
+  defaults: OnboardingDefaults
+  credentials: OnboardingCredentials
+  nodes: OnboardingInputNode[]
+}
+export type OnboardingStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export interface OnboardingNode {
+  id: string
+  name: string
+  publicIp: string
+  machineGroup: string | null
+  regionGroup: string | null
+  countryCode: string | null
+  sshPort: number
+  sshFingerprint: string | null
+  managementIp: string | null
+  hostId: number | null
+  status: OnboardingStatus
+  step: string
+  errorCode: string | null
+  attempt: number
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+  host: { status: string; isInstalled: boolean; architecture: string; agent: { lastSeenAt: string | null } | null } | null
+}
+export interface OnboardingBatch {
+  id: string
+  name: string
+  accountLabel: string
+  defaults: OnboardingDefaults
+  createdAt: string
+  nodes: OnboardingNode[]
+}
+export interface OnboardingListResponse {
+  batches: OnboardingBatch[]
+  total: number
+  page: number
+  pageSize: number
+  gatewaySshHost: string | null
+}
+export interface OnboardingGatewayStatus {
+  ready: boolean
+  code?: string
+  gateway?: { controlIp: string; network: string; sshHost: string }
+}
+
+export interface ManagedHost {
+  id: number
+  name: string
+  accountLabel: string | null
+  publicIp: string | null
+  managementAddress: string
+  countryCode: string
+  machineGroup: string | null
+  regionGroup: string | null
+  architecture: string
+  status: string
+  isInstalled: boolean
+  instanceCount: number
+  portProtocol: PortProtocolState
+  agentLastSeenAt: string | null
+}
+export interface HostInventoryResponse {
+  hosts: ManagedHost[]
+  total: number
+  page: number
+  pageSize: number
+  machineGroups: string[]
+  regionGroups: string[]
+}
+export interface HostInventoryQuery {
+  page?: number
+  search?: string
+  machineGroup?: string
+  regionGroup?: string
+}
+export interface UpdateHostGroupsRequest {
+  hostIds: number[]
+  machineGroup?: string | null
+  regionGroup?: string | null
+}
 
 export interface Host {
   id: number

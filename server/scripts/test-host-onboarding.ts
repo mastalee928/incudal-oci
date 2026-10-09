@@ -10,7 +10,21 @@ import Fastify from 'fastify'
 import { validateOnboardingInput, validateCredentials, isOnboardingPublicIPv4, OnboardingError, shellQuote, type OnboardingInput } from '../src/lib/host-onboarding.js'
 import { connectOnboardingSsh, sshExec, sshFingerprint, validateGatewayResponse } from '../src/services/onboarding-ssh.js'
 import { parseHostOnboardingCsv, OnboardingCsvError } from '../../client/src/utils/hostOnboardingCsv.js'
+import { selectLatestAgentRelease } from '../src/lib/agent-release.js'
 const { Server, utils } = ssh2
+
+test('release selection uses numeric versions rather than GitHub listing order', () => {
+  const release = (tag_name: string) => ({ tag_name, assets: [{ name: 'fixture' }] })
+  const older = release('agent-v0.0.9'), latest = release('agent-v0.0.10')
+  assert.equal(selectLatestAgentRelease([older, latest, release('agent-v0.0.8')]), latest)
+  assert.equal(selectLatestAgentRelease([latest, older]), latest)
+  assert.equal(selectLatestAgentRelease([release('agent-v0.10.0'), release('agent-v1.0.0')])?.tag_name, 'agent-v1.0.0')
+  assert.equal(selectLatestAgentRelease([
+    { ...release('agent-v3.0.0'), draft: true }, { ...release('agent-v2.0.0'), prerelease: true },
+    release('agent-v1.0.0-beta.1'), release('v9.0.0'), { tag_name: 'agent-v4.0.0', assets: [] }, latest
+  ]), latest)
+  assert.equal(selectLatestAgentRelease(null), null)
+})
 const databaseTest = process.env.ONBOARDING_TEST_DATABASE_URL ? test : test.skip
 if (process.env.ONBOARDING_TEST_DATABASE_URL) {
   const url = new URL(process.env.ONBOARDING_TEST_DATABASE_URL)

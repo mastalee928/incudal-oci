@@ -32,6 +32,7 @@ import { processAgentInstanceReport } from '../services/agent-instance-report.js
 import { sendSecurityIncidentNotification } from '../services/traffic-notifier.js'
 import { buildHostAgentPolicyBundle, hasMissingTargetMac } from '../services/host-network-policy.js'
 import { acceptPortProtocolReport } from '../services/host-port-protocol.js'
+import { selectLatestAgentRelease } from '../lib/agent-release.js'
 import {
   BUILTIN_AUDIT_RULES, analyzeAuditData, parseConnections, parseProcesses, parseStartupItems,
   type AuditRuleDefinition, type AuditRuleMatchType, type AuditRuleTarget, type AuditSeverity
@@ -645,21 +646,7 @@ async function fetchJsonFromGitHub<T>(url: string): Promise<T> {
 
 async function fetchLatestAgentRelease(): Promise<GitHubRelease | null> {
   const releases = await fetchJsonFromGitHub<unknown>(getAgentReleaseApiUrl())
-  if (!Array.isArray(releases)) {
-    return null
-  }
-
-  for (const release of releases) {
-    if (!isRecord(release)) {
-      continue
-    }
-    const version = normalizeAgentReleaseVersion(sanitizeShortString(release.tag_name, 128) ?? undefined)
-    const assets = Array.isArray(release.assets) ? release.assets : []
-    if (version && assets.length > 0) {
-      return release as GitHubRelease
-    }
-  }
-  return null
+  return selectLatestAgentRelease(releases) as GitHubRelease | null
 }
 
 async function fetchAgentReleaseAssetSha256(asset: GitHubReleaseAsset): Promise<string | null> {

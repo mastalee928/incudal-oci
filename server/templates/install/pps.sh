@@ -145,11 +145,16 @@ EOF
         cat > /etc/init.d/incudal-pps-guard <<'EOF'
 #!/sbin/openrc-run
 description="Incudal per-instance PPS protection"
-command="/usr/local/sbin/incudal-pps-guard"
-command_background="no"
 depend() {
     need net
-    after incus
+    after firewall nftables incus incusd
+    before incudal-agent
+}
+
+start() {
+    ebegin "Loading Incudal PPS protection"
+    /usr/local/sbin/incudal-pps-guard
+    eend $?
 }
 EOF
         chmod 0755 /etc/init.d/incudal-pps-guard

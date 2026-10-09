@@ -19,6 +19,26 @@ function temp(callback) {
   const dir = mkdtempSync(join(tmpdir(), 'incudal-node-test-'))
   try { callback(dir) } finally { rmSync(dir, { recursive: true, force: true }) }
 }
+test('OpenRC PPS guard loads rules once and propagates loader failures', () => temp(dir => {
+  const unit = source('server/templates/install/pps.sh')
+    .match(/cat > \/etc\/init\.d\/incudal-pps-guard <<'EOF'\n([\s\S]*?)\nEOF/)[1]
+    .replace('/usr/local/sbin/incudal-pps-guard', '"$TEST_GUARD"')
+  const guard = join(dir, 'guard')
+  writeFileSync(guard, '#!/bin/sh\nprintf "loaded\\n" >> "$TRACE"\nexit "$GUARD_STATUS"\n', { mode: 0o755 })
+  for (const status of [0, 19]) {
+    const trace = join(dir, `trace-${status}`)
+    const result = run(`ebegin() { :; }; eend() { return "$1"; };\n${unit}\n[[ -z "\${command:-}" ]]\nif start; then exit 0; else exit $?; fi`, {
+      TEST_GUARD: guard, TRACE: trace, GUARD_STATUS: String(status)
+    })
+    assert.equal(result.status, status, result.stderr)
+    assert.equal(readFileSync(trace, 'utf8'), 'loaded\n')
+  }
+  const dependencies = run(`need() { :; }; after() { printf 'after %s\\n' "$*"; }; before() { printf 'before %s\\n' "$*"; };\n${unit}\ndepend`)
+  assert.equal(dependencies.status, 0, dependencies.stderr)
+  assert.match(dependencies.stdout, /^after .*\bincusd\b/m)
+  assert.match(dependencies.stdout, /^before incudal-agent$/m)
+}))
+
 for (const existing of ['yes', 'no']) {
   test(`Incus initialization with existing bridge=${existing}`, () => temp(dir => {
     const code = stubs + `

@@ -1,6 +1,38 @@
 package protocol
 
-import "testing"
+import (
+	"testing"
+
+	"incudal-agent/internal/ingress"
+)
+
+func TestCanonicalJSONSortsProtocolAcknowledgementFields(t *testing.T) {
+	for _, fixture := range []struct {
+		status ingress.Status
+		want   string
+	}{
+		{ingress.Status{Mode: "tcp_udp", Revision: 2, Applied: true}, `{"portProtocolStatus":{"applied":true,"mode":"tcp_udp","revision":2}}`},
+		{ingress.Status{Mode: "tcp", Revision: 3, Error: "<rule> & failed"}, `{"portProtocolStatus":{"applied":false,"error":"<rule> & failed","mode":"tcp","revision":3}}`},
+	} {
+		body, err := CanonicalJSON(map[string]any{"portProtocolStatus": fixture.status})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != fixture.want {
+			t.Fatalf("heartbeat acknowledgement differs from server canonical JSON: got %s, want %s", body, fixture.want)
+		}
+	}
+}
+
+func TestCanonicalJSONPreservesIntegerPrecisionDuringNormalization(t *testing.T) {
+	body, err := CanonicalJSON(map[string]any{"counter": uint64(18446744073709551615)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != `{"counter":18446744073709551615}` {
+		t.Fatalf("normalization changed the integer: %s", body)
+	}
+}
 
 func TestCanonicalJSONIsStableForMapOrder(t *testing.T) {
 	bodyA := map[string]any{

@@ -17,11 +17,23 @@ import (
 // sorted object keys, compact JSON, and no HTML escaping. The default
 // json.Marshal behavior escapes <, >, and &, which would change the body hash.
 func CanonicalJSON(value any) ([]byte, error) {
+	// encoding/json sorts map keys, but emits struct fields in declaration
+	// order. Normalize typed reports first so the server hashes the same bytes.
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var normalized any
+	if err := decoder.Decode(&normalized); err != nil {
+		return nil, err
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	// Node's JSON.stringify does not HTML-escape <, >, or &.
 	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(value); err != nil {
+	if err := encoder.Encode(normalized); err != nil {
 		return nil, err
 	}
 	return bytes.TrimSuffix(buffer.Bytes(), []byte{'\n'}), nil

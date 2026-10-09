@@ -41,7 +41,7 @@ ONBOARDING_SSH_JUMP_HOST=control.example.com
 docker compose up -d --build app
 ```
 
-Agent 需要 `v0.0.9` 或更新版本。自行部署时先发布自己的 Agent Release，并按现有方式配置 `INCUDAL_AGENT_RELEASE_REPOSITORY`。应用只有在收到 Agent 心跳及协议应用回执后，才将接入任务标记为就绪。
+Agent 需要 `v0.0.10` 或更新版本，该版本同时支持 systemd 和 Alpine OpenRC 的自动升级。自行部署时先发布自己的 Agent Release，并按现有方式配置 `INCUDAL_AGENT_RELEASE_REPOSITORY`。应用只有在收到 Agent 心跳及协议应用回执后，才将接入任务标记为就绪。
 
 ## 导入机器
 

@@ -136,7 +136,8 @@ else
     SCRIPT_PATH="scripts/install-panel.sh"
 fi
 
-TMP_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/incudal-update.XXXXXX.sh")"
+# BusyBox mktemp (Alpine) requires the placeholder to end the template.
+TMP_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/incudal-update.XXXXXX")"
 cleanup() {
     rm -f "$TMP_SCRIPT"
 }

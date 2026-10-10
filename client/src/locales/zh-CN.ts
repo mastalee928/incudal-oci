@@ -187,6 +187,7 @@ export default {
         close: '关闭',
         reset: '重置',
         refresh: '刷新',
+        retry: '重试',
         copy: '复制',
         copied: '已复制',
         copyFailed: '复制失败',

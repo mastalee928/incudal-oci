@@ -187,6 +187,7 @@ export default {
         close: 'Close',
         reset: 'Reset',
         refresh: 'Refresh',
+        retry: 'Retry',
         copy: 'Copy',
         copied: 'Copied',
         copyFailed: 'Copy failed',

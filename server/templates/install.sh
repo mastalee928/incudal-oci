@@ -86,7 +86,9 @@ else
   payload_url="${PANEL_URL}/api/hosts/install.sh/${install_token}?stage=platform&os=${OS_ID}"
 fi
 
-payload_file="$(mktemp '/tmp/incudal-platform.XXXXXX.sh')"
+# The placeholder must be the final component of the template: BusyBox mktemp
+# (Alpine) rejects any suffix after the X's with "Invalid argument".
+payload_file="$(mktemp '/tmp/incudal-platform.XXXXXX')"
 cleanup() { rm -f "$payload_file"; }
 trap cleanup EXIT
 

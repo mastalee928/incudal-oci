@@ -197,6 +197,7 @@ export default {
         close: '關閉',
         reset: '重設',
         refresh: '重新整理',
+        retry: '重試',
         copy: '複製',
         copied: '已複製',
         copyFailed: '複製失敗',

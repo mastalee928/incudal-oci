@@ -9,17 +9,18 @@ client_ports=""
 management_interface=""
 dedicated_ip=""
 bind_ip=""
+ssh_port="22"
 persist="false"
 init_system=""
 
 usage() {
-    echo "Usage: $0 --control-ip <IPv4> [--bridge incusbr0] [--api-port 8443] [--client-ports 10000:10099] [--persist]"
+    echo "Usage: $0 --control-ip <IPv4> [--bridge incusbr0] [--api-port 8443] [--ssh-port 22] [--client-ports 10000:10099] [--persist]"
     echo "Dedicated IPv4: --management-interface <interface> --bind-ip <host-private-IPv4> --dedicated-ip <container-IPv4>"
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --control-ip|--bridge|--api-port|--client-ports|--management-interface|--dedicated-ip|--bind-ip)
+        --control-ip|--bridge|--api-port|--client-ports|--management-interface|--dedicated-ip|--bind-ip|--ssh-port)
             [[ $# -ge 2 ]] || { usage >&2; exit 1; }
             case "$1" in
                 --control-ip) control_ip="$2" ;;
@@ -29,6 +30,7 @@ while [[ $# -gt 0 ]]; do
                 --management-interface) management_interface="$2" ;;
                 --dedicated-ip) dedicated_ip="$2" ;;
                 --bind-ip) bind_ip="$2" ;;
+                --ssh-port) ssh_port="$2" ;;
             esac
             shift 2 ;;
         --persist) persist="true"; shift ;;
@@ -45,7 +47,7 @@ if [[ -n "$dedicated_ip" && ( -z "$management_interface" || -z "$bind_ip" || -n 
     exit 1
 fi
 [[ -z "$bind_ip" || -n "$dedicated_ip" ]] || { echo "--bind-ip requires --dedicated-ip" >&2; exit 1; }
-python3 - "$control_ip" "$api_port" "$client_ports" "$dedicated_ip" "$bind_ip" <<'PY'
+python3 - "$control_ip" "$api_port" "$client_ports" "$dedicated_ip" "$bind_ip" "${ssh_port:-22}" <<'PY'
 import ipaddress
 import sys
 try:
@@ -53,13 +55,16 @@ try:
     if address.is_unspecified or address.is_multicast:
         raise ValueError()
     port = int(sys.argv[2])
-    if not sys.argv[2].isdigit() or not 1 <= port <= 65535 or port == 22:
+    ssh_port = int(sys.argv[6])
+    if not sys.argv[2].isdigit() or not 1 <= port <= 65535 or port == ssh_port:
+        raise ValueError()
+    if not sys.argv[6].isdigit() or not 1 <= ssh_port <= 65535:
         raise ValueError()
     if sys.argv[3]:
         start, end = map(int, sys.argv[3].split(':'))
-        if not 1 <= start <= end <= 65535 or start <= port <= end or start <= 22 <= end:
+        if not 1 <= start <= end <= 65535 or start <= port <= end or start <= ssh_port <= end:
             raise ValueError()
-    for value in sys.argv[4:]:
+    for value in sys.argv[4:6]:
         if value:
             address = ipaddress.IPv4Address(value)
             if address.is_unspecified or address.is_multicast or address.is_loopback:
@@ -124,7 +129,7 @@ local control_source=(-s "$control_ip/32")
 [[ -z "$management_interface" ]] || control_source+=(-i "$management_interface")
 iptables -w -A INCUDAL_OCI_IN "${control_source[@]}" -p tcp --dport "$api_port" -j ACCEPT
 if [[ -n "$management_interface" ]]; then
-    iptables -w -A INCUDAL_OCI_IN "${control_source[@]}" -p tcp --dport 22 -j ACCEPT
+    iptables -w -A INCUDAL_OCI_IN "${control_source[@]}" -p tcp --dport "${ssh_port:-22}" -j ACCEPT
 fi
 iptables -w -A INCUDAL_OCI_IN -p tcp --dport "$api_port" -j REJECT --reject-with tcp-reset
 iptables -w -A INCUDAL_OCI_IN -i "$bridge" -p udp -m multiport --dports 53,67 -j ACCEPT
@@ -203,6 +208,7 @@ persist_oci_network() {
     arguments+="${client_ports:+ --client-ports ${client_ports}}"
     arguments+="${management_interface:+ --management-interface ${management_interface}}"
     arguments+="${dedicated_ip:+ --dedicated-ip ${dedicated_ip} --bind-ip ${bind_ip}}"
+    arguments+=" --ssh-port ${ssh_port:-22}"
     if [[ "$init_system" == openrc ]]; then
         cat > /etc/init.d/incudal-oci-network <<EOF
 #!/sbin/openrc-run

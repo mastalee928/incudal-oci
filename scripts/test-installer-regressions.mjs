@@ -66,7 +66,7 @@ printf '%s\\n' "$*" > "$ARGS_OUT"
 exit ${exitCode}
 `)
     writeFileSync(join(dir, 'bin', 'curl'), '#!/bin/bash\nwhile [[ $# -gt 0 ]]; do if [[ "$1" == -o ]]; then cp "$PAYLOAD_FIXTURE" "$2"; exit 0; fi; shift; done\nexit 1\n', { mode: 0o755 })
-    writeFileSync(join(dir, 'bin', 'mktemp'), '#!/bin/bash\nexec /usr/bin/mktemp "$PAYLOAD_DIR/payload.XXXXXX.sh"\n', { mode: 0o755 })
+    writeFileSync(join(dir, 'bin', 'mktemp'), '#!/bin/bash\nexec /usr/bin/mktemp "$PAYLOAD_DIR/payload.XXXXXX"\n', { mode: 0o755 })
     const script = source('server/templates/install.sh').replace('INJECT_PANEL_URL=""', 'INJECT_PANEL_URL="https://panel.example.test"').replace('INJECT_TOKEN=""', 'INJECT_TOKEN="test-token"')
     writeFileSync(join(dir, 'bootstrap.sh'), script)
     const result = spawnSync('bash', [join(dir, 'bootstrap.sh'), '--mode', 'nat', '--storage-source', '/example/path'], { encoding: 'utf8', env: { ...process.env, BASH_ENV: '', PAYLOAD_FIXTURE: join(dir, 'fixture.sh'), PATH: join(dir, 'bin') + ':' + process.env.PATH, PAYLOAD_DIR: dir, ARGS_OUT: join(dir, 'args') } })

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import test, { after, before } from 'node:test'
+import test, { after, before, mock } from 'node:test'
+import { Resolver } from 'node:dns/promises'
 import { generateKeyPairSync, randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
@@ -7,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ssh2, { type Server as SshServer, type Client } from 'ssh2'
 import Fastify from 'fastify'
-import { validateOnboardingInput, validateCredentials, isOnboardingPublicIPv4, OnboardingError, shellQuote, type OnboardingInput } from '../src/lib/host-onboarding.js'
+import { validateOnboardingInput, validateCredentials, isOnboardingPublicIPv4, normalizeOnboardingAddress, resolveOnboardingInput, OnboardingError, shellQuote, type OnboardingInput, type OnboardingRequest } from '../src/lib/host-onboarding.js'
 import { connectOnboardingSsh, sshExec, sshFingerprint, validateGatewayResponse } from '../src/services/onboarding-ssh.js'
 import { parseHostOnboardingCsv, OnboardingCsvError } from '../../client/src/utils/hostOnboardingCsv.js'
 import { selectLatestAgentRelease } from '../src/lib/agent-release.js'
@@ -56,6 +57,45 @@ test('onboarding validates credentials, resources and duplicate rows before queu
   expectCode(() => validateOnboardingInput(null), 'INVALID_REQUEST_ID')
   const perHost = valid(); delete perHost.credentials; perHost.nodes[0].password = 'row fixture'
   assert.doesNotThrow(() => validateOnboardingInput(perHost))
+})
+
+test('single-host addresses accept IPs and full domains, not URLs or local targets', () => {
+  assert.equal(normalizeOnboardingAddress(' Node.Example.com. '), 'node.example.com')
+  assert.equal(normalizeOnboardingAddress('8.8.4.4'), '8.8.4.4')
+  assert.equal(normalizeOnboardingAddress('例子.com'), 'xn--fsqu00a.com')
+  for (const address of ['localhost', 'node.local', 'node.internal', 'node.localhost', 'https://node.example.com', 'node.example.com:22', 'root@node.example.com', 'node.example.com/path', '8.8.8.999', '0x7f.0.0.1', 'node%2eexample.com', null]) {
+    expectCode(() => normalizeOnboardingAddress(address), 'HOST_ADDRESS_INVALID')
+  }
+  expectCode(() => normalizeOnboardingAddress('169.254.169.254'), 'PUBLIC_IPV4_REQUIRED')
+  const ambiguous = { ...valid(), nodes: [{ name: 'node-01', address: 'node.example.com', publicIp: '8.8.4.4' }] }
+  expectCode(() => validateOnboardingInput(ambiguous), 'HOST_ADDRESS_INVALID')
+})
+
+test('single-host DNS is resolved once and converted to a fixed IP before queueing', async () => {
+  const input: OnboardingRequest = { ...valid(), accountLabel: '', nodes: [{ name: 'host-node-example-com', address: 'Node.Example.com.', sshPort: 2222 }] }
+  const queried: string[] = []
+  const result = await resolveOnboardingInput(input, async hostname => { queried.push(hostname); return ['8.8.4.4', '8.8.4.4'] })
+  assert.deepEqual(queried, ['node.example.com'])
+  assert.equal(result.nodes[0].publicIp, '8.8.4.4')
+  assert.equal(result.nodes[0].sshPort, 2222)
+  assert.ok(!('address' in result.nodes[0]))
+  assert.equal(input.nodes[0].address, 'Node.Example.com.')
+  assert.equal(result.accountLabel, '')
+  const ip = await resolveOnboardingInput({ ...input, nodes: [{ name: 'host-ip', address: '1.1.1.1' }] }, async () => { throw new Error('IPs must not use DNS') })
+  assert.equal(ip.nodes[0].publicIp, '1.1.1.1')
+})
+
+test('DNS errors, private records, ambiguous hosts and duplicate resolved destinations never queue', async () => {
+  const input: OnboardingRequest = { ...valid(), nodes: [{ name: 'node-01', address: 'node.example.com' }] }
+  const rejected = (records: string[], code: string) => assert.rejects(resolveOnboardingInput(input, async () => records), (error: unknown) => error instanceof OnboardingError && error.code === code)
+  await rejected([], 'HOST_ADDRESS_UNRESOLVED')
+  await rejected(['8.8.4.4', '127.0.0.1'], 'PUBLIC_IPV4_REQUIRED')
+  await rejected(['169.254.169.254'], 'PUBLIC_IPV4_REQUIRED')
+  await rejected(['::1'], 'PUBLIC_IPV4_REQUIRED')
+  await rejected(['8.8.4.4', '1.1.1.1'], 'HOST_ADDRESS_MULTIPLE')
+  await assert.rejects(resolveOnboardingInput(input, async () => { throw new Error('do-not-echo-resolver-details') }), (error: unknown) => error instanceof OnboardingError && error.code === 'HOST_ADDRESS_UNRESOLVED' && !String(error).includes('do-not-echo'))
+  input.nodes.push({ name: 'node-02', publicIp: '8.8.4.4' })
+  await rejected(['8.8.4.4'], 'DUPLICATE_IMPORT_ROW')
 })
 test('CSV handles BOM, CRLF, quoted commas and multiline credentials without losing content', () => {
   const nodes = parseHostOnboardingCsv('\uFEFFname,publicIp,sshPort,password\r\nnode-01,8.8.8.8,2222,"a,b"\r\n')
@@ -246,6 +286,33 @@ databaseTest('batch creation preserves per-machine groups and credentials stay p
     assert.equal((await app.inject({ method: 'POST', url: `/api/host-onboarding/nodes/${node.id}/cancel` })).statusCode, 409)
   } finally {
     await app.close(); await prisma.hostOnboardingBatch.deleteMany({ where: { id: input.requestId } }); await prisma.user.delete({ where: { id: owner.id } })
+  }
+})
+
+databaseTest('single-host API persists the resolved address and accepts an optional account label', async () => {
+  const { prisma } = await import('../src/db/prisma.js')
+  const { default: routes } = await import('../src/routes/host-onboarding.js')
+  const owner = await prisma.user.create({ data: { username: 'single-' + randomUUID(), passwordHash: 'test-only', role: 'admin' } })
+  const app = Fastify()
+  app.decorate('authenticateAdmin', async (request: any) => { request.user = { id: owner.id, role: 'admin' } })
+  await app.register(routes, { prefix: '/api/host-onboarding' })
+  const input: OnboardingRequest = { ...valid(), accountLabel: '', nodes: [{ name: 'host-node-example-com', address: 'node.example.com', sshPort: 2222 }] }
+  const dns = mock.method(Resolver.prototype, 'resolve4', async () => ['8.8.4.4'])
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/host-onboarding', payload: input })
+    assert.equal(created.statusCode, 202, created.body)
+    const node = await prisma.hostOnboardingNode.findFirstOrThrow({ where: { batchId: input.requestId } })
+    assert.equal(node.publicIp, '8.8.4.4'); assert.equal(node.sshPort, 2222)
+    assert.equal((await prisma.hostOnboardingBatch.findUniqueOrThrow({ where: { id: input.requestId } })).accountLabel, '')
+    dns.mock.mockImplementation(async () => ['127.0.0.1'])
+    assert.equal((await app.inject({ method: 'POST', url: '/api/host-onboarding', payload: input })).json().id, input.requestId)
+    assert.equal(dns.mock.callCount(), 1, 'Retrying the same request must not resolve a different machine')
+    const rejected = await app.inject({ method: 'POST', url: '/api/host-onboarding', payload: { ...input, requestId: randomUUID() } })
+    assert.equal(rejected.statusCode, 400)
+    assert.equal(rejected.json().code, 'PUBLIC_IPV4_REQUIRED')
+    assert.equal(await prisma.hostOnboardingBatch.count({ where: { createdById: owner.id } }), 1)
+  } finally {
+    dns.mock.restore(); await app.close(); await prisma.hostOnboardingBatch.deleteMany({ where: { id: input.requestId } }); await prisma.user.delete({ where: { id: owner.id } })
   }
 })
 

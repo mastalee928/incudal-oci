@@ -782,8 +782,11 @@ export interface CreateOnboardingRequest {
   accountLabel: string
   defaults: OnboardingDefaults
   credentials: OnboardingCredentials
-  nodes: OnboardingInputNode[]
+  nodes: OnboardingTargetInput[]
 }
+export type OnboardingTargetInput = Omit<OnboardingInputNode, 'publicIp'> & (
+  { publicIp: string; address?: never } | { address: string; publicIp?: never }
+)
 export type OnboardingStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 export interface OnboardingNode {
   id: string

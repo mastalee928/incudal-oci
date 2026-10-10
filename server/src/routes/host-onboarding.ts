@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
 import { encryptSensitiveData } from '../lib/security.js'
-import { OnboardingError, validateCredentials, validateOnboardingInput, onboardingCredentials, onboardingPanelOrigin, type OnboardingInput, type OnboardingCredentials } from '../lib/host-onboarding.js'
+import { OnboardingError, validateCredentials, validateOnboardingInput, resolveOnboardingInput, onboardingCredentials, onboardingPanelOrigin, type OnboardingRequest, type OnboardingCredentials } from '../lib/host-onboarding.js'
 import { gatewayCommand, gatewayConfigured } from '../services/onboarding-ssh.js'
 import hostInventoryRoutes from './host-inventory.js'
 
@@ -46,7 +46,7 @@ export default async function hostOnboardingRoutes(fastify: FastifyInstance) {
     return { batches, total, page, pageSize: 10, gatewaySshHost: process.env.ONBOARDING_SSH_JUMP_HOST || process.env.ONBOARDING_GATEWAY_HOST || null }
   })
 
-  fastify.post<{ Body: OnboardingInput }>('/', {
+  fastify.post<{ Body: OnboardingRequest }>('/', {
     onRequest: auth, bodyLimit: 2 * 1024 * 1024,
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: { body: { type: 'object', additionalProperties: false, required: ['requestId', 'name', 'accountLabel', 'defaults', 'nodes'], properties: {
@@ -57,8 +57,8 @@ export default async function hostOnboardingRoutes(fastify: FastifyInstance) {
         cpuAllowanceMax: { type: 'integer', minimum: 1, maximum: 100000 }, memoryMax: { type: 'integer', minimum: 256, maximum: 1048576 },
         portProtocol: { type: 'string', enum: ['tcp', 'tcp_udp'] }
       } }, credentials: credentialsSchema, nodes: { type: 'array', minItems: 1, maxItems: 50, items: {
-        type: 'object', additionalProperties: false, required: ['name', 'publicIp'], properties: {
-          name: { type: 'string', minLength: 2, maxLength: 64 }, publicIp: { type: 'string', maxLength: 15 },
+        type: 'object', additionalProperties: false, required: ['name'], properties: {
+          name: { type: 'string', minLength: 2, maxLength: 64 }, publicIp: { type: 'string', maxLength: 15 }, address: { type: 'string', maxLength: 254 },
           sshPort: { type: 'integer', minimum: 1, maximum: 65535 }, sshFingerprint: { type: 'string', maxLength: 50 },
           machineGroup: { type: 'string', maxLength: 60 }, regionGroup: { type: 'string', maxLength: 60 }, countryCode: { type: 'string', pattern: '^[a-z]{2}$' },
           ...credentialsSchema.properties
@@ -69,14 +69,14 @@ export default async function hostOnboardingRoutes(fastify: FastifyInstance) {
     reply.header('Cache-Control', 'no-store')
     try {
       validateOnboardingInput(request.body)
-      const input = request.body
-      const existing = await prisma.hostOnboardingBatch.findUnique({ where: { id: input.requestId }, select: { id: true, createdById: true } })
+      const existing = await prisma.hostOnboardingBatch.findUnique({ where: { id: request.body.requestId }, select: { id: true, createdById: true } })
       if (existing) {
         if (existing.createdById !== request.user.id) return reply.code(409).send({ code: 'INVALID_REQUEST_ID' })
         return { id: existing.id }
       }
       onboardingPanelOrigin()
       await gatewayCommand()
+      const input = await resolveOnboardingInput(request.body)
       const names = input.nodes.map(row => row.name), addresses = input.nodes.map(row => row.publicIp)
       const duplicates = await prisma.host.findMany({ where: { OR: [{ userId: request.user.id, name: { in: names } }, { natPublicIp: { in: addresses } }, { ipAddress: { in: addresses } }] }, select: { name: true } })
       if (duplicates.length) return reply.code(409).send({ code: 'HOST_ALREADY_REGISTERED', conflicts: duplicates.map(host => host.name) })

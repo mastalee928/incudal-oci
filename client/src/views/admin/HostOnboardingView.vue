@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { useToast } from '@/stores/toast'
 import { availableFlagCountryCodes, getLocalizedCountryName } from '@/utils/countryDisplay'
 import { OnboardingCsvError, parseHostOnboardingCsv } from '@/utils/hostOnboardingCsv'
 import HostInventoryPanel from '@/components/host/HostInventoryPanel.vue'
-import type { OnboardingBatch, OnboardingCredentials, OnboardingDefaults, OnboardingGatewayStatus, OnboardingNode, OnboardingStatus } from '@/types/api'
+import type { OnboardingBatch, OnboardingCredentials, OnboardingDefaults, OnboardingGatewayStatus, OnboardingNode, OnboardingStatus, OnboardingTargetInput } from '@/types/api'
 
 const { t, te, locale } = useI18n()
 const toast = useToast()
@@ -23,6 +23,13 @@ const total = ref(0)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / 10)))
 const expanded = ref<string | null>(null)
 const showCreate = ref(false)
+const createMode = ref<'single' | 'batch'>('single')
+const firstCreateInput = ref<HTMLInputElement | null>(null)
+const hostAddress = ref('')
+const sshPort = ref(22)
+const sshFingerprint = ref('')
+const machineSuggestions = ref(['E2', 'ARM'])
+const regionSuggestions = ref<string[]>([])
 const submitting = ref(false)
 const actionNodeId = ref<string | null>(null)
 const retryNode = ref<OnboardingNode | null>(null)
@@ -30,7 +37,8 @@ const sshNode = ref<OnboardingNode | null>(null)
 const requestId = ref(crypto.randomUUID())
 const batchName = ref('')
 const accountLabel = ref('')
-const defaults = ref<OnboardingDefaults>({ countryCode: 'us', storageSize: 30, cpuAllowanceMax: 200, memoryMax: 768, portProtocol: 'tcp_udp' })
+const initialDefaults = (): OnboardingDefaults => ({ countryCode: 'us', storageSize: 30, cpuAllowanceMax: 200, memoryMax: 768, portProtocol: 'tcp_udp' })
+const defaults = ref<OnboardingDefaults>(initialDefaults())
 const authType = ref<'password' | 'privateKey'>('password')
 const credential = ref('')
 const retryAuthType = ref<'password' | 'privateKey'>('password')
@@ -57,7 +65,13 @@ const preview = computed(() => {
       : errorText('CSV_INVALID') }
   }
 })
-const credentialsNeeded = computed(() => preview.value.nodes.some(node => !node.password && !node.privateKey))
+const generatedName = computed(() => ('host-' + hostAddress.value.trim().toLowerCase().replace(/\.$/, '').replace(/[^a-z0-9_-]/g, '-')).slice(0, 64))
+const inputNodes = computed<OnboardingTargetInput[]>(() => createMode.value === 'single' ? [{
+  name: batchName.value.trim() || generatedName.value, address: hostAddress.value.trim(), sshPort: sshPort.value,
+  sshFingerprint: sshFingerprint.value.trim() || undefined
+}] : preview.value.nodes)
+const importBlocked = computed(() => createMode.value === 'batch' && (!!preview.value.error || !preview.value.nodes.length))
+const credentialsNeeded = computed(() => createMode.value === 'single' || preview.value.nodes.some(node => !node.password && !node.privateKey))
 const statusClasses: Record<OnboardingStatus, string> = {
   queued: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
   running: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
@@ -103,11 +117,24 @@ function changePage(next: number) {
   page.value = next; expanded.value = null; void loadBatches()
 }
 function applySearch() { page.value = 1; expanded.value = null; void loadBatches() }
+async function openCreate(mode: 'single' | 'batch') {
+  createMode.value = mode; showCreate.value = true
+  void api.hostOnboarding.inventory().then(result => {
+    if (disposed) return
+    machineSuggestions.value = [...new Set(['E2', 'ARM', ...result.machineGroups])]
+    regionSuggestions.value = result.regionGroups
+  }).catch(() => { /* Group suggestions are optional; custom values still work. */ })
+  await nextTick()
+  firstCreateInput.value?.focus()
+}
+function expandOptions(event: Event) { (event.currentTarget as HTMLDetailsElement).open = true }
 function closeCreate() {
   if (submitting.value) return
   showCreate.value = false
   credential.value = ''; importText.value = ''; formError.value = ''
   batchName.value = ''; accountLabel.value = ''; requestId.value = crypto.randomUUID()
+  hostAddress.value = ''; sshPort.value = 22; sshFingerprint.value = ''; authType.value = 'password'
+  defaults.value = initialDefaults()
 }
 async function readCsv(event: Event) {
   const input = event.target as HTMLInputElement
@@ -120,12 +147,12 @@ async function readCsv(event: Event) {
   } catch { formError.value = errorText('CSV_TOO_LARGE') }
   finally { input.value = '' }
 }
-async function createBatch() {
-  if (submitting.value || preview.value.error || !preview.value.nodes.length || !gateway.value?.ready) return
+async function createHosts() {
+  if (submitting.value || importBlocked.value || !gateway.value?.ready) return
   submitting.value = true; formError.value = ''
   try {
-    const result = await api.hostOnboarding.create({ requestId: requestId.value, name: batchName.value.trim(), accountLabel: accountLabel.value.trim(),
-      defaults: { ...defaults.value }, credentials: credential.value ? { [authType.value]: credential.value } : {}, nodes: preview.value.nodes })
+    const result = await api.hostOnboarding.create({ requestId: requestId.value, name: batchName.value.trim() || generatedName.value, accountLabel: accountLabel.value.trim(),
+      defaults: { ...defaults.value }, credentials: credential.value ? { [authType.value]: credential.value } : {}, nodes: inputNodes.value })
     submitting.value = false
     closeCreate()
     if (disposed) return
@@ -174,7 +201,10 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); credential.value = '';
         <h1 class="page-title">{{ t('onboarding.title') }}</h1>
         <p class="page-description">{{ t('onboarding.description') }}</p>
       </div>
-      <button type="button" class="btn-primary shrink-0 whitespace-nowrap" :disabled="!gateway?.ready" @click="showCreate = true">{{ t('onboarding.newBatch') }}</button>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <button type="button" class="btn-primary whitespace-nowrap" :disabled="!gateway?.ready" @click="openCreate('single')">{{ t('onboarding.newHost') }}</button>
+        <button type="button" class="btn-secondary whitespace-nowrap" :disabled="!gateway?.ready" @click="openCreate('batch')">{{ t('onboarding.importHosts') }}</button>
+      </div>
     </div>
 
     <section class="card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -207,7 +237,7 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); credential.value = '';
         <button type="button" class="w-full p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-left" :aria-expanded="expanded === batch.id" @click="expanded = expanded === batch.id ? null : batch.id">
           <span class="min-w-0">
             <span class="block text-sm font-semibold text-themed break-words">{{ batch.name }}</span>
-            <span class="block text-xs text-themed-muted mt-1 break-words">{{ batch.accountLabel }} · {{ date(batch.createdAt) }}</span>
+            <span class="block text-xs text-themed-muted mt-1 break-words"><template v-if="batch.accountLabel">{{ batch.accountLabel }} · </template>{{ date(batch.createdAt) }}</span>
           </span>
           <span class="text-xs text-themed-muted shrink-0">{{ t('onboarding.summary', counts(batch)) }} {{ expanded === batch.id ? '−' : '+' }}</span>
         </button>
@@ -257,37 +287,58 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); credential.value = '';
     <Teleport to="body">
       <div v-if="showCreate" class="modal-overlay" @keydown.esc="closeCreate">
         <div class="modal-backdrop" @click="closeCreate"></div>
-        <form class="modal-content onboarding-create-dialog max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="onboarding-create-title" @submit.prevent="createBatch">
+        <form class="modal-content onboarding-create-dialog max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="onboarding-create-title" @submit.prevent="createHosts">
           <div class="modal-header gap-2">
-            <h2 id="onboarding-create-title" class="modal-title">{{ t('onboarding.newBatch') }}</h2>
+            <h2 id="onboarding-create-title" class="modal-title">{{ t(createMode === 'single' ? 'onboarding.newHost' : 'onboarding.importHosts') }}</h2>
             <button type="button" class="btn-secondary" :disabled="submitting" @click="closeCreate">{{ t('common.close') }}</button>
           </div>
           <div class="modal-body min-h-0 overflow-y-auto">
             <fieldset class="space-y-4 min-w-0" :disabled="submitting">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label class="text-sm text-themed">{{ t('onboarding.batchName') }}<input v-model="batchName" required maxlength="80" class="input w-full mt-1" autocomplete="off" /></label>
+              <template v-if="createMode === 'single'">
+                <p class="text-sm text-themed-muted">{{ t('onboarding.singleHint') }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_8rem] gap-3">
+                  <label class="text-sm text-themed min-w-0">{{ t('onboarding.address') }}<input ref="firstCreateInput" v-model.trim="hostAddress" required maxlength="254" class="input w-full mt-1" autocomplete="off" autocapitalize="none" spellcheck="false" :placeholder="t('onboarding.addressPlaceholder')" /></label>
+                  <label class="text-sm text-themed">{{ t('onboarding.sshPort') }}<input v-model.number="sshPort" required type="number" min="1" max="65535" step="1" class="input w-full mt-1" /></label>
+                </div>
+              </template>
+              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="text-sm text-themed">{{ t('onboarding.batchName') }}<input ref="firstCreateInput" v-model="batchName" required maxlength="80" class="input w-full mt-1" autocomplete="off" /></label>
                 <label class="text-sm text-themed">{{ t('onboarding.accountLabel') }}<input v-model="accountLabel" required maxlength="80" class="input w-full mt-1" autocomplete="off" /></label>
-                <label class="text-sm text-themed">{{ t('hostInventory.machineGroup') }}<input v-model="defaults.machineGroup" maxlength="60" list="onboarding-machine-groups" class="input w-full mt-1" :placeholder="t('hostInventory.machineHint')" /></label>
-                <label class="text-sm text-themed">{{ t('hostInventory.regionGroup') }}<input v-model="defaults.regionGroup" maxlength="60" class="input w-full mt-1" :placeholder="t('hostInventory.regionHint')" /></label>
-                <datalist id="onboarding-machine-groups"><option value="E2" /><option value="ARM" /></datalist>
-                <label class="text-sm text-themed">{{ t('onboarding.country') }}<select v-model="defaults.countryCode" class="input w-full mt-1"><option v-for="code in availableFlagCountryCodes" :key="code" :value="code">{{ getLocalizedCountryName(code, locale) }}</option></select></label>
-                <label class="text-sm text-themed">{{ t('portProtocol.title') }}<select v-model="defaults.portProtocol" class="input w-full mt-1"><option value="tcp">{{ t('portProtocol.tcp') }}</option><option value="tcp_udp">{{ t('portProtocol.tcp_udp') }}</option></select></label>
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label class="text-sm text-themed">{{ t('onboarding.cpu') }} (%)<input v-model.number="defaults.cpuAllowanceMax" required type="number" min="1" max="100000" step="1" class="input w-full mt-1" /></label>
-                <label class="text-sm text-themed">{{ t('onboarding.memory') }} (MB)<input v-model.number="defaults.memoryMax" required type="number" min="256" max="1048576" step="1" class="input w-full mt-1" /></label>
-                <label class="text-sm text-themed">{{ t('onboarding.storage') }} (GiB)<input v-model.number="defaults.storageSize" required type="number" min="10" max="10000" step="1" class="input w-full mt-1" /></label>
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <label for="onboarding-credential" class="text-sm text-themed">{{ t(authType === 'password' ? 'onboarding.password' : 'onboarding.privateKey') }}</label>
+                  <button type="button" class="text-xs text-primary-600 dark:text-primary-400 hover:underline" @click="authType = authType === 'password' ? 'privateKey' : 'password'; credential = ''">{{ t(authType === 'password' ? 'onboarding.usePrivateKey' : 'onboarding.usePassword') }}</button>
+                </div>
+                <input v-if="authType === 'password'" id="onboarding-credential" v-model="credential" type="password" autocomplete="new-password" maxlength="1024" :required="credentialsNeeded" class="input w-full" />
+                <textarea v-else id="onboarding-credential" v-model="credential" autocomplete="off" spellcheck="false" maxlength="32768" :required="credentialsNeeded" rows="4" class="input w-full font-mono text-xs"></textarea>
+                <p class="text-xs text-themed-muted">{{ t(createMode === 'single' ? 'onboarding.singleCredentialsHint' : 'onboarding.credentialsHint') }}</p>
               </div>
-              <p class="text-xs text-themed-muted">{{ t('onboarding.resourceHint') }}</p>
-              <div class="border-t border-themed pt-4 space-y-3">
-                <label class="block text-sm text-themed">{{ t('onboarding.authType') }}<select v-model="authType" class="input w-full sm:w-48 mt-1 block"><option value="password">{{ t('onboarding.password') }}</option><option value="privateKey">{{ t('onboarding.privateKey') }}</option></select></label>
-                <label class="block text-sm text-themed">{{ t(authType === 'password' ? 'onboarding.password' : 'onboarding.privateKey') }}
-                  <input v-if="authType === 'password'" v-model="credential" type="password" autocomplete="new-password" maxlength="1024" :required="credentialsNeeded" class="input w-full mt-1" />
-                  <textarea v-else v-model="credential" autocomplete="off" spellcheck="false" maxlength="32768" :required="credentialsNeeded" rows="4" class="input w-full mt-1 font-mono text-xs"></textarea>
-                </label>
-                <p class="text-xs text-themed-muted">{{ t('onboarding.credentialsHint') }}</p>
-              </div>
-              <div class="border-t border-themed pt-4 space-y-2">
+              <details :open="createMode === 'batch'" class="rounded-lg border border-themed" @invalid.capture="expandOptions">
+                <summary class="cursor-pointer p-3 text-sm font-medium text-themed">{{ t('onboarding.optionalSettings') }}</summary>
+                <div class="px-3 pb-3 space-y-3">
+                  <div v-if="createMode === 'single'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="text-sm text-themed min-w-0">{{ t('onboarding.hostName') }}<input v-model.trim="batchName" maxlength="64" pattern="[A-Za-z0-9_\-]{2,64}" :title="t('onboarding.errors.HOST_NAME_INVALID')" :placeholder="hostAddress ? generatedName : t('onboarding.autoName')" class="input w-full mt-1" autocomplete="off" /></label>
+                    <label class="text-sm text-themed">{{ t('onboarding.accountLabel') }}<input v-model.trim="accountLabel" maxlength="80" class="input w-full mt-1" autocomplete="off" /></label>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="text-sm text-themed">{{ t('hostInventory.machineGroup') }}<input v-model.trim="defaults.machineGroup" maxlength="60" list="onboarding-machine-groups" class="input w-full mt-1" :placeholder="t('hostInventory.machineHint')" /></label>
+                    <label class="text-sm text-themed">{{ t('hostInventory.regionGroup') }}<input v-model.trim="defaults.regionGroup" maxlength="60" list="onboarding-region-groups" class="input w-full mt-1" :placeholder="t('hostInventory.regionHint')" /></label>
+                    <datalist id="onboarding-machine-groups"><option v-for="group in machineSuggestions" :key="group" :value="group" /></datalist>
+                    <datalist id="onboarding-region-groups"><option v-for="group in regionSuggestions" :key="group" :value="group" /></datalist>
+                    <label class="text-sm text-themed">{{ t('onboarding.country') }}<select v-model="defaults.countryCode" class="input w-full mt-1"><option v-for="code in availableFlagCountryCodes" :key="code" :value="code">{{ getLocalizedCountryName(code, locale) }}</option></select></label>
+                    <label class="text-sm text-themed">{{ t('portProtocol.title') }}<select v-model="defaults.portProtocol" class="input w-full mt-1"><option value="tcp">{{ t('portProtocol.tcp') }}</option><option value="tcp_udp">{{ t('portProtocol.tcp_udp') }}</option></select></label>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label class="text-sm text-themed">{{ t('onboarding.cpu') }} (%)<input v-model.number="defaults.cpuAllowanceMax" required type="number" min="1" max="100000" step="1" class="input w-full mt-1" /></label>
+                    <label class="text-sm text-themed">{{ t('onboarding.memory') }} (MB)<input v-model.number="defaults.memoryMax" required type="number" min="256" max="1048576" step="1" class="input w-full mt-1" /></label>
+                    <label class="text-sm text-themed">{{ t('onboarding.storage') }} (GiB)<input v-model.number="defaults.storageSize" required type="number" min="10" max="10000" step="1" class="input w-full mt-1" /></label>
+                  </div>
+                  <p class="text-xs text-themed-muted">{{ t('onboarding.resourceHint') }}</p>
+                  <label v-if="createMode === 'single'" class="block text-sm text-themed">{{ t('onboarding.optionalFingerprint') }}<input v-model.trim="sshFingerprint" maxlength="50" pattern="SHA256:[A-Za-z0-9+\/]{43}" :title="t('onboarding.errors.SSH_FINGERPRINT_INVALID')" class="input w-full mt-1 font-mono text-xs" autocomplete="off" spellcheck="false" /></label>
+                </div>
+              </details>
+              <div v-if="createMode === 'batch'" class="border-t border-themed pt-4 space-y-2">
                 <label class="block text-sm text-themed">{{ t('onboarding.importFile') }}<input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="block w-full text-xs mt-2" @change="readCsv" /></label>
                 <label class="block text-sm text-themed">{{ t('onboarding.machineList') }}<textarea v-model="importText" required rows="5" maxlength="2097152" autocomplete="off" spellcheck="false" class="input w-full mt-1 font-mono text-xs" :placeholder="t('onboarding.csvPlaceholder')"></textarea></label>
                 <p class="text-xs text-themed-muted break-words">{{ t('onboarding.csvHint') }}</p>
@@ -303,9 +354,9 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); credential.value = '';
             </fieldset>
           </div>
           <div class="modal-footer flex-wrap gap-2">
-            <span class="text-xs text-themed-muted mr-auto">{{ t('onboarding.nodeCount', { count: preview.nodes.length }) }}</span>
+            <span class="text-xs text-themed-muted mr-auto">{{ t('onboarding.nodeCount', { count: createMode === 'single' ? 1 : preview.nodes.length }) }}</span>
             <button type="button" class="btn-secondary" :disabled="submitting" @click="closeCreate">{{ t('common.cancel') }}</button>
-            <button type="submit" class="btn-primary whitespace-nowrap" :disabled="submitting || !!preview.error || !preview.nodes.length || !gateway?.ready">{{ t(submitting ? 'common.submitting' : 'onboarding.start') }}</button>
+            <button type="submit" class="btn-primary whitespace-nowrap" :disabled="submitting || importBlocked || !gateway?.ready">{{ t(submitting ? 'common.submitting' : 'onboarding.start') }}</button>
           </div>
         </form>
       </div>

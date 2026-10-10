@@ -7,6 +7,7 @@ import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode, type ErrorCodeType } from '../lib/errors.js'
 import { prisma } from '../db/prisma.js'
+import { getInstancePortProtocols, portProtocolSelect, portProtocolView, permitsUdpMapping } from '../services/host-port-protocol.js'
 import type { InstanceStatus, Prisma } from '@prisma/client'
 import { getIncusClient } from '../lib/incus/index.js'
 import {
@@ -208,6 +209,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     const result = await db.getInstancesPaginated(options)
+    const protocols = await getInstancePortProtocols(result.items.map((item: any) => item.id))
 
     return {
       instances: result.items.map((i: unknown) => {
@@ -350,7 +352,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           response.hostId = instance.host_id
         }
 
-        return response
+        return { ...response, portProtocol: protocols.get(instance.id) }
       }),
       total: result.total,
       page: result.page,
@@ -507,6 +509,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
               countryCode: true,
               natPublicIp: true,
               natPublicIpv6: true,
+              ...portProtocolSelect,
               ipv6Gateway: true,
               ipAddress: true,
               url: true
@@ -583,6 +586,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       },
       hostCountryCode: i.host?.countryCode || 'us',
       natPublicIp: i.host?.natPublicIp || null,
+      portProtocol: portProtocolView(i.host),
       hostNatPublicIpv6: i.host?.natPublicIpv6 || null,
       hostIpv6Gateway: i.host?.ipv6Gateway || null,
       hostIpAddress: i.host?.ipAddress || (() => {
@@ -2611,7 +2615,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // root_password should NEVER be returned in API responses
     // It's only returned once during instance creation
 
-    return { instance: response }
+    const protocols = await getInstancePortProtocols([instanceId])
+    return { instance: { ...response, portProtocol: protocols.get(instanceId) } }
   })
 
   // 获取实例Root密码（实例所有者或管理员）
@@ -4316,6 +4321,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     let allocatedPort: number | undefined = publicPort
+    if (protocol === 'udp' && !await permitsUdpMapping(instance.host_id)) {
+      return reply.code(409).send({ code: 'HOST_UDP_DISABLED', error: 'This host currently allows TCP ingress only.' })
+    }
     if (!allocatedPort) {
       const port = await db.allocatePort(instance.host_id, protocol)
       if (!port) {
@@ -4634,6 +4642,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     // 4. 确定映射关系
+    if (protocol !== 'tcp' && !await permitsUdpMapping(instance.host_id)) {
+      return reply.code(409).send({ code: 'HOST_UDP_DISABLED', error: 'This host currently allows TCP ingress only.' })
+    }
     let finalMappings: Array<{ privatePort: number; publicPort: number }> = []
 
     if (portMappings && portMappings.length > 0) {

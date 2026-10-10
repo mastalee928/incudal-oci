@@ -19,6 +19,14 @@ if [ -f "$CERT_SOURCE_DIR/client.key" ]; then
   chmod 0600 "$CERT_TARGET_DIR/client.key"
 fi
 
+# This dedicated key can only run the gateway's restricted forced command.
+# The full host management key remains outside the application container.
+if [ -f "$CERT_SOURCE_DIR/onboarding-gateway.key" ]; then
+  cp "$CERT_SOURCE_DIR/onboarding-gateway.key" "$CERT_TARGET_DIR/onboarding-gateway.key"
+  chown incudal:nodejs "$CERT_TARGET_DIR/onboarding-gateway.key"
+  chmod 0600 "$CERT_TARGET_DIR/onboarding-gateway.key"
+fi
+
 echo "🔄 Running database migrations..."
 cd /app/server
 su-exec incudal:nodejs npx prisma migrate deploy

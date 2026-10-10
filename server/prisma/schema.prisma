@@ -659,6 +659,8 @@ model Host {
   name                String
   url                 String
   location            String?
+  machineGroup        String?      @map("machine_group")
+  regionGroup         String?      @map("region_group")
   countryCode         String       @default("us") @map("country_code")
   architecture        String       @default("x86_64")
   status              HostStatus   @default(offline)
@@ -673,6 +675,11 @@ model Host {
   natBindIpv6         String?      @map("nat_bind_ipv6") // 端口映射实际监听的 IPv6 地址
   natPortStart        Int?         @map("nat_port_start")
   natPortEnd          Int?         @map("nat_port_end")
+  portProtocol        String       @default("tcp_udp") @map("port_protocol")
+  portProtocolRevision Int         @default(1) @map("port_protocol_revision")
+  portProtocolApplied String       @default("tcp_udp") @map("port_protocol_applied")
+  portProtocolAppliedRevision Int  @default(1) @map("port_protocol_applied_revision")
+  portProtocolError   String?       @map("port_protocol_error")
   cpuUsed             Int          @default(0) @map("cpu_used")
   memoryUsed          Int          @default(0) @map("memory_used")
   diskUsed            Int          @default(0) @map("disk_used")
@@ -759,10 +766,59 @@ model Host {
   instanceAuditActions   InstanceAuditAction[]
   agentAuditConfig       HostAgentAuditConfig?
   networkPolicies        HostNetworkPolicy[]
+  onboardingNode         HostOnboardingNode?
 
   @@unique([userId, name]) // 同一用户下名称唯一
   @@index([userId])
+  @@index([machineGroup, regionGroup])
   @@map("hosts")
+}
+
+model HostOnboardingBatch {
+  id           String   @id
+  createdById  Int      @map("created_by_id")
+  name         String
+  accountLabel String   @map("account_label")
+  defaults     Json
+  createdAt    DateTime @default(now()) @map("created_at")
+  nodes        HostOnboardingNode[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("host_onboarding_batches")
+}
+
+model HostOnboardingNode {
+  id                   String    @id @default(uuid())
+  batchId              String    @map("batch_id")
+  hostId               Int?      @unique @map("host_id")
+  name                 String
+  publicIp             String    @unique @map("public_ip")
+  machineGroup         String?   @map("machine_group")
+  regionGroup          String?   @map("region_group")
+  countryCode          String?   @map("country_code")
+  sshPort              Int       @default(22) @map("ssh_port")
+  sshFingerprint       String?   @map("ssh_fingerprint")
+  credentialsEncrypted String?   @db.Text @map("credentials_encrypted")
+  credentialsExpireAt  DateTime  @map("credentials_expire_at")
+  managementIp         String?   @map("management_ip")
+  nodePublicKey        String?   @map("node_public_key")
+  status               String    @default("queued")
+  step                 String    @default("queued")
+  errorCode            String?   @map("error_code")
+  attempt              Int       @default(0)
+  leaseToken           String?   @map("lease_token")
+  leaseUntil           DateTime? @map("lease_until")
+  startedAt            DateTime? @map("started_at")
+  completedAt          DateTime? @map("completed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  batch HostOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  host  Host? @relation(fields: [hostId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, name])
+  @@index([status, leaseUntil])
+  @@map("host_onboarding_nodes")
 }
 
 model HostAgent {

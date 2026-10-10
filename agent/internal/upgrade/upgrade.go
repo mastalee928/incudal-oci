@@ -34,6 +34,7 @@ const (
 
 var ErrUpgradeInProgress = errors.New("agent upgrade already in progress")
 var systemdServiceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.@-]+$`)
+var openRCServiceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 type RestartFunc func(ctx context.Context, serviceName string) error
 
@@ -62,7 +63,7 @@ func DefaultRunner(cfg config.Config) *Runner {
 		ServiceName:      defaultServiceName,
 		AllowedBaseURL:   cfg.PanelURL,
 		HTTPClient:       &http.Client{Timeout: cfg.RequestTimeout},
-		Restart:          restartSystemdService,
+		Restart:          restartService,
 		MaxDownloadBytes: defaultMaxDownloadBytes,
 		MaxBinaryBytes:   defaultMaxBinaryBytes,
 	}
@@ -389,6 +390,34 @@ func copyFile(source string, target string) error {
 		return err
 	}
 	return targetFile.Chmod(mode)
+}
+
+func restartService(ctx context.Context, serviceName string) error {
+	if _, err := exec.LookPath("systemctl"); err == nil {
+		return restartSystemdService(ctx, serviceName)
+	}
+	if !openRCServiceNamePattern.MatchString(serviceName) {
+		return fmt.Errorf("invalid OpenRC service name: %s", serviceName)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	rcServicePath, err := exec.LookPath("rc-service")
+	if err != nil {
+		return fmt.Errorf("no supported service manager: %w", err)
+	}
+	setsidPath, err := exec.LookPath("setsid")
+	if err != nil {
+		return fmt.Errorf("schedule OpenRC restart: %w", err)
+	}
+	// OpenRC must restart us from a separate session after Apply has released
+	// its lock. It must survive cancellation of the completed upgrade context.
+	command := exec.Command(setsidPath, "/bin/sh", "-c", `sleep 2; exec "$1" "$2" restart`, "incudal-agent-restart", rcServicePath, serviceName)
+	if err := command.Start(); err != nil {
+		return err
+	}
+	go func() { _ = command.Wait() }()
+	return nil
 }
 
 func restartSystemdService(ctx context.Context, serviceName string) error {

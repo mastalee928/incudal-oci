@@ -3324,6 +3324,7 @@ function formatHourlyDate(value: string | null | undefined): string {
 
     <!-- Modals -->
     <AddPortModal
+      :udp-allowed="instance?.portProtocol?.requested !== 'tcp' && instance?.portProtocol?.applied !== 'tcp'"
       v-model:visible="showAddPortModal"
       :loading="portLoading"
       :error="portError"

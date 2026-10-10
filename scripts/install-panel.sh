@@ -264,7 +264,8 @@ done
 [[ -n "\$update_ref" && -n "\$script_sha256" ]] || { echo "必须同时提供 --ref 和 --script-sha256" >&2; exit 2; }
 [[ -n "\$update_mode" ]] || update_mode="auto"
 install -d -o root -g root -m 0700 /var/lib/incudal/web-updates
-tmp_script="\$(mktemp /var/lib/incudal/web-updates/remote-update.XXXXXX.sh)"
+# BusyBox mktemp (Alpine) requires the placeholder to end the template.
+tmp_script="\$(mktemp /var/lib/incudal/web-updates/remote-update.XXXXXX)"
 trap 'rm -f "\$tmp_script"' EXIT
 script_url="https://raw.githubusercontent.com/${DEFAULT_GITHUB_REPO}/\${update_ref}/scripts/remote-update.sh"
 /usr/bin/curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 120 "\$script_url" -o "\$tmp_script"
@@ -530,7 +531,9 @@ download_release() {
     local download_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
     local tmp_file
     local checksum_file
-    tmp_file="$(mktemp "/tmp/incudal-${version}-${ARCH}.XXXXXX.tar.gz")"
+    # BusyBox mktemp (Alpine) requires the placeholder to end the template.
+    # tar -xzf forces gzip decompression, so no suffix is needed here.
+    tmp_file="$(mktemp "/tmp/incudal-${version}-${ARCH}.XXXXXX")"
     checksum_file="${tmp_file}.sha256"
 
     info "下载地址: ${download_url}"

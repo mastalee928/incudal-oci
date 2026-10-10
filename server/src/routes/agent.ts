@@ -31,6 +31,8 @@ import {
 import { processAgentInstanceReport } from '../services/agent-instance-report.js'
 import { sendSecurityIncidentNotification } from '../services/traffic-notifier.js'
 import { buildHostAgentPolicyBundle, hasMissingTargetMac } from '../services/host-network-policy.js'
+import { acceptPortProtocolReport } from '../services/host-port-protocol.js'
+import { selectLatestAgentRelease } from '../lib/agent-release.js'
 import {
   BUILTIN_AUDIT_RULES, analyzeAuditData, parseConnections, parseProcesses, parseStartupItems,
   type AuditRuleDefinition, type AuditRuleMatchType, type AuditRuleTarget, type AuditSeverity
@@ -62,6 +64,7 @@ interface AgentHeartbeatBody {
   securityEvents?: Array<Record<string, unknown>>
   auditSnapshots?: Array<Record<string, unknown>>
   networkPolicyStatus?: Record<string, unknown>
+  portProtocolStatus?: Record<string, unknown>
 }
 
 const securityIncidentDedupe = new Map<string, number>()
@@ -643,21 +646,7 @@ async function fetchJsonFromGitHub<T>(url: string): Promise<T> {
 
 async function fetchLatestAgentRelease(): Promise<GitHubRelease | null> {
   const releases = await fetchJsonFromGitHub<unknown>(getAgentReleaseApiUrl())
-  if (!Array.isArray(releases)) {
-    return null
-  }
-
-  for (const release of releases) {
-    if (!isRecord(release)) {
-      continue
-    }
-    const version = normalizeAgentReleaseVersion(sanitizeShortString(release.tag_name, 128) ?? undefined)
-    const assets = Array.isArray(release.assets) ? release.assets : []
-    if (version && assets.length > 0) {
-      return release as GitHubRelease
-    }
-  }
-  return null
+  return selectLatestAgentRelease(releases) as GitHubRelease | null
 }
 
 async function fetchAgentReleaseAssetSha256(asset: GitHubReleaseAsset): Promise<string | null> {
@@ -1638,6 +1627,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       }
     })
 
+    await acceptPortProtocolReport(agent.hostId, request.body.portProtocolStatus)
+
     if (request.body.networkPolicyStatus && typeof request.body.networkPolicyStatus === 'object') {
       const statusRevision = sanitizeShortString(request.body.networkPolicyStatus.revision, 128)
       const applied = request.body.networkPolicyStatus.applied === true
@@ -1703,11 +1694,13 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     }
 
     const auditConfig = await prisma.hostAgentAuditConfig.findUnique({ where: { hostId: agent.hostId } })
+    const hostProtocol = await prisma.host.findUniqueOrThrow({ where: { id: agent.hostId }, select: { portProtocol: true, portProtocolRevision: true } })
     return {
       ok: true,
       serverTime: now.toISOString(),
       taskPollIntervalSeconds: 15,
       instanceReport,
+      portProtocol: { mode: hostProtocol.portProtocol, revision: hostProtocol.portProtocolRevision },
       upgrade: await buildAgentUpgradeInstruction(request, request.body, agent),
       monitoring: {
         enabled: auditConfig?.enabled === true,

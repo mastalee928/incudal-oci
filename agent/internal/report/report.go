@@ -18,7 +18,7 @@ var incusSocketCandidates = []string{
 func HeartbeatPayload(version string, heartbeatIntervalSeconds int) map[string]any {
 	return map[string]any{
 		"version":      version,
-		"capabilities": []any{"heartbeat", "report", "host-metrics", "instance-status", "traffic-counters", "security-events"},
+		"capabilities": []any{"heartbeat", "report", "host-metrics", "instance-status", "traffic-counters", "security-events", "ingress-port-protocol-v1"},
 		"runtime": map[string]any{
 			"goos":   runtime.GOOS,
 			"goarch": runtime.GOARCH,

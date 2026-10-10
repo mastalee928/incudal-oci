@@ -9,6 +9,7 @@ import { buildHostApiUrl, extractHostAddressFromUrl, validateIdentifier, validat
 import api from '@/api'
 import { useToast } from '@/stores/toast'
 import FlagIcon from '@/components/FlagIcon.vue'
+import HostPortProtocolSetting from '@/components/host/HostPortProtocolSetting.vue'
 
 const { t, locale } = useI18n()
 const themeStore = useThemeStore()
@@ -335,6 +336,7 @@ async function saveConfig() {
 
 <template>
   <div class="card p-6">
+    <HostPortProtocolSetting :key="host.id" :host-id="host.id" />
     <form class="space-y-6" @submit.prevent="saveConfig">
       <!-- 基本信息 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

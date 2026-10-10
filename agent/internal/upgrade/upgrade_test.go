@@ -10,12 +10,59 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"incudal-agent/internal/panel"
 )
+
+func TestOpenRCRestartSurvivesUpgradeContextCancellation(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("OpenRC restart is Linux-specific")
+	}
+	bin := t.TempDir()
+	for _, name := range []string{"setsid", "sleep"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			t.Fatalf("required restart tool %s: %v", name, err)
+		}
+		if err := os.Symlink(path, filepath.Join(bin, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	output := filepath.Join(bin, "restart-arguments")
+	t.Setenv("INCUDAL_RESTART_TEST_OUTPUT", output)
+	t.Setenv("PATH", bin)
+	if err := os.WriteFile(filepath.Join(bin, "rc-service"), []byte("#!/bin/sh\nprintf '%s %s' \"$1\" \"$2\" > \"$INCUDAL_RESTART_TEST_OUTPUT\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := restartService(ctx, "incudal-agent"); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(output); err == nil && string(data) == "incudal-agent restart" {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("OpenRC restart was not executed after the upgrade context was cancelled")
+}
+
+func TestOpenRCRestartRejectsServiceOptions(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	for _, name := range []string{"--help", "../incudal-agent", "agent;reboot"} {
+		if err := restartService(context.Background(), name); err == nil {
+			t.Fatalf("accepted invalid OpenRC service name %q", name)
+		}
+	}
+}
 
 func TestApplyUpgradeReplacesBinaryAndRestarts(t *testing.T) {
 	tempDir := t.TempDir()

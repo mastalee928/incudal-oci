@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PortProtocolBadge from '@/components/instance/PortProtocolBadge.vue'
 import { ref, onMounted, onUnmounted, onActivated, onDeactivated, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -1626,6 +1627,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   >
                     {{ $t('common.networkMode.' + ((instance as any).networkMode || instance.network_mode || 'nat')) }}
                   </span>
+                  <PortProtocolBadge :value="instance.portProtocol" />
                 </div>
               </td>
               <td class="px-3 py-3">
@@ -2105,6 +2107,7 @@ async function confirmBatchDestroy(): Promise<void> {
                     >
                       {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
                     </span>
+                    <PortProtocolBadge :value="instance.portProtocol" />
                     <span
                       v-if="isAdmin"
                       class="max-w-[8rem] truncate rounded-full px-2 py-0.5 text-[10px] sm:text-[11px]"

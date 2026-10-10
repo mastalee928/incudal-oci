@@ -1,5 +1,50 @@
 # Changelog
 
+## 2026-10-10 — 主机接入与管理
+
+本次更新新增「主机接入与管理」：在面板中填写地址、SSH 端口和凭据，即可把一台已 DD 为纯净 Alpine、Debian、Ubuntu 或 Rocky Linux 的机器自动接入为主控下的 Incus 节点，任务、分组与进度保存在数据库。升级包含 Prisma 迁移，必须重新构建服务并执行 `prisma migrate deploy`。
+
+### 主机接入
+
+- 新增管理入口「主机接入与管理」，含「主机管理」与「接入任务」两个页签；机型与地区是两个独立分组维度，可组合筛选、单台修改或勾选批量调整。
+- 单机接入只需地址（IPv4 或域名）、SSH 端口和凭据。域名必须解析到唯一的公网 IPv4，解析结果固定保存到任务，后续安装与重试不再重新解析；多个 A 记录、内网地址或无 A 记录会返回明确错误。
+- 支持 CSV、TSV 或直接粘贴批量导入，每批最多 50 台；可逐台指定机型分组、地区分组、国家、SSH 指纹和凭据，单行取值优先于批次默认值。凭据加密保存 24 小时，成功或取消后立即清除。
+- 接入通过主控的 WireGuard 管理接口完成。宿主机只接受主控的管理密钥；应用使用独立的受限网关密钥，只能执行状态检查与幂等注册，不能运行任意 shell。网关先落盘预留管理地址再修改 WireGuard，崩溃后可复用同一地址。
+- 任务通过数据库租约领取，每个应用进程并发 2 台，单次尝试上限 45 分钟。远端安装独立运行，以 PID、`boot_id` 与 attempt 文件避免重复安装；主控重启后继续检查。失败可重试，排队或失败可取消。
+- 面板只有在收到 Incus API 连接、Agent 心跳及协议应用回执后，才把接入任务标记为就绪。
+- 新增节点「协议」设置，可在 TCP 与 TCP + UDP 之间切换。规则由 Agent 在宿主机按实例 MAC 执行，只影响目标实例；重启前会恢复已保存规则，避免面板故障导致规则丢失。
+- Agent 需要 `v0.0.10` 或更新版本。自行部署时请先在本仓库发布自己的 Agent Release，并按现有方式配置 `INCUDAL_AGENT_RELEASE_REPOSITORY`。
+
+### 修复
+
+- 修复在 Alpine 上接入必然失败的问题。引导脚本使用 `mktemp '/tmp/incudal-platform.XXXXXX.sh'`，把后缀写在占位符之后；BusyBox 的 `mktemp` 要求占位符位于模板末尾，因此报 `mktemp: : Invalid argument` 并中止，平台安装脚本从未被执行。GNU coreutils 容忍该写法，所以此前只在 Alpine 上暴露。
+- 修复网络步骤在**所有**系统上必然失败的问题。接入任务一直向 `configure-oci-node-network.sh` 传递 `--ssh-port`，而该脚本从未接受这一参数，会直接输出用法并退出。脚本现在接受 `--ssh-port`（默认 22），用它替换原来硬编码的 22，并在持久化的启动服务参数中一并保留。
+- 修复 DD 出来的精简 Alpine 缺少 `/usr/local/sbin` 时，每实例 PPS 防护安装失败并中断整次安装的问题。
+- 补齐接入界面缺失的 `common.retry` 翻译。
+- 同步修正主控侧同类 `mktemp` 写法（面板安装脚本与远程更新脚本），避免主控将来运行在 BusyBox 环境时出现同样故障。
+
+### 升级步骤
+
+Docker Compose 部署：
+
+```bash
+git pull
+docker compose build app
+docker compose up -d --no-deps app
+docker compose logs --tail=100 app
+```
+
+入口脚本会自动执行 `prisma migrate deploy`。非容器部署需手动执行：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter server exec prisma migrate deploy
+pnpm --filter server exec prisma generate
+pnpm build
+```
+
+升级前必须备份 PostgreSQL。接入功能要求主控运行 WireGuard 管理接口 `incudal-mgmt`，并已安装受限网关，完整前置步骤见 [docs/host-onboarding.md](./docs/host-onboarding.md)。
+
 ## 2026-09-16 — 计费一致性、并发安全与 IPAM 修复
 
 本次更新集中处理 9 月生产审计发现的流量计费、实例交付、资源台账、支付回调和数据库并发问题。升级包含 Prisma 迁移，必须重新构建服务并执行 `prisma migrate deploy`。

@@ -83,6 +83,7 @@ const adminOnlyMenuItems: MenuItem[] = [
   { name: 'admin-hosting', path: '/admin/hosting', icon: 'coin', label: 'nav.hosting' },
   { divider: true, label: 'nav.resources' },
   { name: 'my-hosts', path: '/resources/hosts', icon: 'database', label: 'nav.hosts' },
+  { name: 'admin-host-onboarding', path: '/admin/host-onboarding', icon: 'server', label: 'onboarding.title' },
   { name: 'my-packages', path: '/resources/packages', icon: 'package', label: 'nav.packages' },
   { name: 'admin-images', path: '/admin/images', icon: 'image', label: 'nav.images' },
   { name: 'admin-instance-create', path: '/admin/instances/create', icon: 'gift', label: 'nav.create' },

@@ -16,6 +16,7 @@ interface Props {
   portQuotaLimit?: number
   // 新增：网络模式
   networkMode?: string
+  udpAllowed?: boolean
 }
 
 interface Emits {
@@ -53,12 +54,14 @@ const batchForm = ref({
 })
 
 watch(() => props.visible, (newVal) => {
+  if (newVal && props.udpAllowed === false) form.value.protocol = 'tcp'
   if (!newVal) {
     addMode.value = 'single'
     form.value = { protocol: 'both', publicPort: '', privatePort: '', remark: '' }
     batchForm.value = { publicPortStart: '', publicPortEnd: '', privatePortStart: '', privatePortEnd: '' }
   }
 })
+watch(() => props.udpAllowed, (allowed) => { if (allowed === false) form.value.protocol = 'tcp' }, { immediate: true })
 
 // 解析端口范围（支持 "80" 或 "80-85" 格式）
 function parsePortRange(input: string): { start: number; end: number } | null {
@@ -277,6 +280,7 @@ function close(): void {
                           ? (themeStore.isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-900 border-gray-900 text-white')
                           : (themeStore.isDark ? 'border-gray-800 text-gray-500 hover:border-gray-700' : 'border-gray-300 text-gray-600 hover:border-gray-400')
                       ]"
+                      :disabled="udpAllowed === false"
                       @click="form.protocol = 'both'"
                     >
                       Both
@@ -301,6 +305,7 @@ function close(): void {
                           ? (themeStore.isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-900 border-gray-900 text-white')
                           : (themeStore.isDark ? 'border-gray-800 text-gray-500 hover:border-gray-700' : 'border-gray-300 text-gray-600 hover:border-gray-400')
                       ]"
+                      :disabled="udpAllowed === false"
                       @click="form.protocol = 'udp'"
                     >
                       UDP

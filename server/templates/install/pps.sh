@@ -48,6 +48,8 @@ BRIDGE_NAME=${BRIDGE_NAME}
 EOF
     chmod 0600 /etc/incudal/pps-guard.conf
 
+    # A DD-installed Alpine image does not necessarily ship /usr/local/sbin.
+    install -d -m 0755 /usr/local/sbin
     cat > /usr/local/sbin/incudal-pps-guard <<'GUARD'
 #!/usr/bin/env bash
 set -euo pipefail

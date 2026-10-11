@@ -57,6 +57,7 @@ Desktop.ini
 server/certs/*.key
 server/certs/*.crt
 server/certs/*.pem
+server/certs/*.pub
 !server/certs/.gitkeep
 
 # ==================== 数据库 ====================
@@ -66,6 +67,8 @@ server/certs/*.pem
 
 # ==================== Docker ====================
 .docker/
+docker-compose.override.yml
+docker-compose.override.yaml
 
 # ==================== 临时文件 ====================
 tmp/
@@ -74,6 +77,8 @@ temp/
 *.tmp
 *.temp
 *.pid
+__pycache__/
+server/build-info.json
 
 # ==================== Vite ====================
 client/node_modules/.vite/

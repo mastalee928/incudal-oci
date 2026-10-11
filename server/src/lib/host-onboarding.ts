@@ -6,23 +6,35 @@ export class OnboardingError extends Error {
   constructor(public readonly code: string) { super(code) }
 }
 
-export interface OnboardingDefaults {
+export const RESOURCE_PRESETS = ['E2', 'ARM1C', 'ARM2C', 'ARM3C', 'ARM4C'] as const
+export type ResourcePreset = typeof RESOURCE_PRESETS[number]
+export interface OnboardingResourceInput {
+  resourcePreset?: ResourcePreset | null
+  customerDiskGiB?: number
+}
+
+export interface OnboardingDefaults extends OnboardingResourceInput {
   countryCode: string
   machineGroup?: string
   regionGroup?: string
-  storageSize: number
-  cpuAllowanceMax: number
-  memoryMax: number
+  machineGroupId?: number | null
+  regionGroupId?: number | null
+  // Legacy API clients may still supply explicit limits. New forms use probing.
+  storageSize?: number
+  cpuAllowanceMax?: number
+  memoryMax?: number
   portProtocol: 'tcp' | 'tcp_udp'
 }
 export interface OnboardingCredentials { password?: string; privateKey?: string }
-export interface OnboardingInputNode extends OnboardingCredentials {
+export interface OnboardingInputNode extends OnboardingCredentials, OnboardingResourceInput {
   name: string
   publicIp: string
   sshPort?: number
   sshFingerprint?: string
   machineGroup?: string
   regionGroup?: string
+  machineGroupId?: number | null
+  regionGroupId?: number | null
   countryCode?: string
 }
 export interface OnboardingInput {
@@ -107,6 +119,14 @@ function boundedInteger(value: unknown, min: number, max: number): value is numb
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
 }
 
+function validateResourceInput(input: Record<string, unknown>) {
+  if (input.resourcePreset !== undefined && input.resourcePreset !== null && !RESOURCE_PRESETS.includes(input.resourcePreset as ResourcePreset)) throw new OnboardingError('RESOURCE_PRESET_INVALID')
+  if (input.customerDiskGiB !== undefined && !boundedInteger(input.customerDiskGiB, 10, 10000)) throw new OnboardingError('CUSTOMER_DISK_INVALID')
+  for (const id of [input.machineGroupId, input.regionGroupId]) {
+    if (id !== undefined && id !== null && !boundedInteger(id, 1, 2147483647)) throw new OnboardingError('HOST_GROUP_INVALID')
+  }
+}
+
 export function validHostGroup(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= 60 && !/[\u0000-\u001f\u007f]/.test(value)
 }
@@ -131,14 +151,17 @@ export function validateOnboardingInput(input: unknown): asserts input is Onboar
   if (!Array.isArray(input.nodes) || input.nodes.length < 1 || input.nodes.length > 50) throw new OnboardingError('BATCH_SIZE_INVALID')
   const defaults = input.defaults
   if (!isRecord(defaults) || typeof defaults.countryCode !== 'string' || !/^[a-z]{2}$/.test(defaults.countryCode) || !['tcp', 'tcp_udp'].includes(String(defaults.portProtocol)) ||
-      !boundedInteger(defaults.storageSize, 10, 10000) || !boundedInteger(defaults.cpuAllowanceMax, 1, 100000) ||
-      !boundedInteger(defaults.memoryMax, 256, 1048576)) throw new OnboardingError('BATCH_DEFAULTS_INVALID')
+      (defaults.storageSize !== undefined && !boundedInteger(defaults.storageSize, 10, 10000)) ||
+      (defaults.cpuAllowanceMax !== undefined && !boundedInteger(defaults.cpuAllowanceMax, 1, 100000)) ||
+      (defaults.memoryMax !== undefined && !boundedInteger(defaults.memoryMax, 256, 1048576))) throw new OnboardingError('BATCH_DEFAULTS_INVALID')
+  validateResourceInput(defaults)
   for (const group of [defaults.machineGroup, defaults.regionGroup]) {
     if (group !== undefined && group !== '' && !validHostGroup(group)) throw new OnboardingError('HOST_GROUP_INVALID')
   }
   const names = new Set<string>(), addresses = new Set<string>()
   for (const row of input.nodes) {
     if (!isRecord(row) || typeof row.name !== 'string' || !/^[A-Za-z0-9_-]{2,64}$/.test(row.name)) throw new OnboardingError('HOST_NAME_INVALID')
+    validateResourceInput(row)
     if ((row.publicIp === undefined) === (row.address === undefined)) throw new OnboardingError('HOST_ADDRESS_INVALID')
     const address = row.address === undefined ? row.publicIp : normalizeOnboardingAddress(row.address)
     if (row.address === undefined && !isOnboardingPublicIPv4(address)) throw new OnboardingError('PUBLIC_IPV4_REQUIRED')

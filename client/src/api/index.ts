@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import type { HostPortProtocolState, PortProtocol, PortProtocolState } from '@/types/api'
-import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest } from '@/types/api'
+import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest, HostMachineGroup, HostRegionGroup } from '@/types/api'
 
 // Keep bearer tokens in memory only. Session restoration uses the HttpOnly
 // refresh-token cookie, so XSS cannot recover a persisted access token.
@@ -51,7 +51,6 @@ import type {
   HostAgentInstallCommandResponse,
   HostAgentUpgradeRequestResponse,
   HostAgentBulkUpgradeResponse,
-  SystemUpdateMode,
   SystemUpdateStatusResponse,
   SystemUpdateCheckResponse,
   Snapshot,
@@ -1333,13 +1332,21 @@ const api = {
 
   // 主机管理
   hostOnboarding: {
+    groups: (): Promise<{ groups: HostMachineGroup[] }> => http.get('/host-onboarding/groups'),
+    createMachineGroup: (name: string): Promise<HostMachineGroup> => http.post('/host-onboarding/groups/machines', { name }),
+    renameMachineGroup: (id: number, name: string): Promise<HostMachineGroup> => http.patch(`/host-onboarding/groups/machines/${id}`, { name }),
+    deleteMachineGroup: (id: number): Promise<{ success: boolean }> => http.delete(`/host-onboarding/groups/machines/${id}`),
+    createRegionGroup: (data: { machineGroupId: number; name: string; countryCode?: string | null }): Promise<HostRegionGroup> => http.post('/host-onboarding/groups/regions', data),
+    renameRegionGroup: (id: number, data: { name: string; countryCode?: string | null }): Promise<HostRegionGroup> => http.patch(`/host-onboarding/groups/regions/${id}`, data),
+    deleteRegionGroup: (id: number): Promise<{ success: boolean }> => http.delete(`/host-onboarding/groups/regions/${id}`),
     inventory: (params: HostInventoryQuery = {}): Promise<HostInventoryResponse> => http.get('/host-onboarding/inventory', { params }),
     updateGroups: (data: UpdateHostGroupsRequest): Promise<{ success: boolean; updated: number }> => http.patch('/host-onboarding/inventory/groups', data),
     gateway: (): Promise<OnboardingGatewayStatus> => http.get('/host-onboarding/gateway'),
     list: (params: { page?: number; search?: string } = {}): Promise<OnboardingListResponse> => http.get('/host-onboarding', { params }),
     create: (data: CreateOnboardingRequest): Promise<{ id: string }> => http.post('/host-onboarding', data),
     retry: (id: string, credentials: OnboardingCredentials): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/retry`, credentials),
-    cancel: (id: string): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/cancel`)
+    cancel: (id: string): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/cancel`),
+    deleteTask: (id: string): Promise<{ success: boolean }> => http.delete(`/host-onboarding/nodes/${id}`)
   },
   hosts: {
     getPortProtocol: (id: number): Promise<HostPortProtocolState> => http.get(`/hosts/${id}/port-protocol`),
@@ -2250,10 +2257,10 @@ const api = {
       http.get('/system-update/status', source ? { params: { source } } : undefined),
     check: (source?: string): Promise<SystemUpdateCheckResponse> =>
       http.post('/system-update/check', source ? { source } : {}),
-    apply: (source: string | undefined, mode: SystemUpdateMode): Promise<{
+    apply: (source: string | undefined, commit: string): Promise<{
       accepted: boolean
       execution: SystemUpdateStatusResponse['execution']
-    }> => http.post('/system-update/apply', { source, mode, confirm: true })
+    }> => http.post('/system-update/apply', { source, commit, mode: 'docker', confirm: true })
   },
 
   // 系统配置（管理员）

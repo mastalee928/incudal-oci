@@ -208,6 +208,7 @@ model InstanceTask {
   instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   @@index([hostId, status])
+  @@index([targetHostId, status])
   @@index([instanceId])
   @@index([instanceId, status, leaseExpiresAt])
   @@index([userId])
@@ -661,6 +662,12 @@ model Host {
   location            String?
   machineGroup        String?      @map("machine_group")
   regionGroup         String?      @map("region_group")
+  machineGroupId      Int?         @map("machine_group_id")
+  regionGroupId       Int?         @map("region_group_id")
+  resourcePreset      String?      @map("resource_preset")
+  customerDiskGiB     Int?         @map("customer_disk_gib") // Customer disk quota, in GiB; excludes storage-pool overhead.
+  resourceSnapshot    Json?        @map("resource_snapshot")
+  singleTenant        Boolean      @default(false) @map("single_tenant")
   countryCode         String       @default("us") @map("country_code")
   architecture        String       @default("x86_64")
   status              HostStatus   @default(offline)
@@ -767,11 +774,39 @@ model Host {
   agentAuditConfig       HostAgentAuditConfig?
   networkPolicies        HostNetworkPolicy[]
   onboardingNode         HostOnboardingNode?
+  machineGroupEntry      HostMachineGroup? @relation(fields: [machineGroupId], references: [id], onDelete: SetNull)
+  regionGroupEntry       HostRegionGroup? @relation(fields: [regionGroupId], references: [id], onDelete: SetNull)
 
   @@unique([userId, name]) // 同一用户下名称唯一
   @@index([userId])
   @@index([machineGroup, regionGroup])
+  @@index([machineGroupId, regionGroupId])
   @@map("hosts")
+}
+
+model HostMachineGroup {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  regions   HostRegionGroup[]
+  hosts     Host[]
+  nodes     HostOnboardingNode[]
+
+  @@map("host_machine_groups")
+}
+
+model HostRegionGroup {
+  id             Int      @id @default(autoincrement())
+  machineGroupId Int      @map("machine_group_id")
+  name           String
+  countryCode    String?  @map("country_code")
+  createdAt      DateTime @default(now()) @map("created_at")
+  machineGroup   HostMachineGroup @relation(fields: [machineGroupId], references: [id], onDelete: Cascade)
+  hosts          Host[]
+  nodes          HostOnboardingNode[]
+
+  @@unique([machineGroupId, name])
+  @@map("host_region_groups")
 }
 
 model HostOnboardingBatch {
@@ -795,6 +830,11 @@ model HostOnboardingNode {
   publicIp             String    @unique @map("public_ip")
   machineGroup         String?   @map("machine_group")
   regionGroup          String?   @map("region_group")
+  machineGroupId       Int?      @map("machine_group_id")
+  regionGroupId        Int?      @map("region_group_id")
+  resourcePreset       String?   @map("resource_preset")
+  customerDiskGiB      Int?      @map("customer_disk_gib")
+  resolvedResources    Json?     @map("resolved_resources")
   countryCode          String?   @map("country_code")
   sshPort              Int       @default(22) @map("ssh_port")
   sshFingerprint       String?   @map("ssh_fingerprint")
@@ -810,14 +850,18 @@ model HostOnboardingNode {
   leaseUntil           DateTime? @map("lease_until")
   startedAt            DateTime? @map("started_at")
   completedAt          DateTime? @map("completed_at")
+  deletedAt            DateTime? @map("deleted_at")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
   batch HostOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   host  Host? @relation(fields: [hostId], references: [id], onDelete: SetNull)
+  machineGroupEntry HostMachineGroup? @relation(fields: [machineGroupId], references: [id], onDelete: SetNull)
+  regionGroupEntry HostRegionGroup? @relation(fields: [regionGroupId], references: [id], onDelete: SetNull)
 
   @@unique([batchId, name])
   @@index([status, leaseUntil])
+  @@index([deletedAt, createdAt])
   @@map("host_onboarding_nodes")
 }
 

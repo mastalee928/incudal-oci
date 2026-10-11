@@ -46,6 +46,7 @@ export function isIncusNotFoundError(error: unknown): boolean {
 }
 
 export class IncusClient {
+  hostId?: number
   baseUrl: string
   certPath: string | null
   keyPath: string | null

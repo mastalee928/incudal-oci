@@ -7,7 +7,7 @@ import { prisma } from './prisma.js'
 import type { Prisma } from '@prisma/client'
 import type { Host } from '../types/database.js'
 import { getSafeHttpUrl } from '../lib/external-url.js'
-import { calculateAllocatedHostResources, HOST_RESOURCE_INSTANCE_STATUSES } from '../lib/host-resource-usage.js'
+import { calculateAllocatedHostResources, HOST_RESOURCE_INSTANCE_STATUSES, HOST_OCCUPIED_INSTANCE_WHERE, dedicatedHostReadyWhere, hostPendingMoveWhere } from '../lib/host-resource-usage.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
 
@@ -602,13 +602,8 @@ export async function selectAvailableHost(options: {
   const { packageHostIds, nodeSelectors = [], cpu, memory, disk, hostId, ownerId, requireHourlyBillingEnabled = false } = options
 
   // 构建查询条件
-  const where: {
-    status: 'online'
-    id?: number | { in: number[] }
-    userId?: number
-    tags?: { path: string[]; array_contains: string }
-    hourlyBillingEnabled?: boolean
-  } = {
+  const where: Prisma.HostWhereInput = {
+    ...dedicatedHostReadyWhere(),
     status: 'online',
     ...(requireHourlyBillingEnabled ? { hourlyBillingEnabled: true } : {})
   }
@@ -635,6 +630,7 @@ export async function selectAvailableHost(options: {
   const hosts = await prisma.host.findMany({
     where,
     include: {
+      _count: { select: { instances: { where: HOST_OCCUPIED_INSTANCE_WHERE } } },
       instances: {
         where: {
           status: { in: [...HOST_RESOURCE_INSTANCE_STATUSES] }
@@ -655,6 +651,9 @@ export async function selectAvailableHost(options: {
 
   // 过滤和评�?
   for (const host of hosts) {
+    if (host.singleTenant && (host._count.instances > 0 || await prisma.instanceTask.count({ where: hostPendingMoveWhere(host.id) }) > 0)) continue
+    // Instance disks are MiB; customer limits are GiB.
+    if (host.customerDiskGiB !== null && disk > host.customerDiskGiB * 1024) continue
     // storage pool gate: a host without any instance_data pool cannot host new instances
     const instanceDataPoolCount = await prisma.storagePool.count({
       where: { hostId: host.id, purpose: 'instance_data' }
@@ -780,6 +779,7 @@ export async function selectAndReserveHostWithLock(
     hostId?: number | null
     ownerId?: number
     portCount?: number
+    instanceId?: number
     requireHourlyBillingEnabled?: boolean
   }
 ): Promise<(Host & { cpu_allowance_max?: number; memory_max?: number }) | null> {
@@ -816,7 +816,7 @@ export async function selectAndReserveHostWithLock(
     SELECT id, name, url, location, country_code, status, cert_path, key_path,
            nat_public_ip, nat_port_start, nat_port_end, 
            cpu_used, memory_used, disk_used,
-           cpu_allowance_max, memory_max, storage_size,
+           cpu_allowance_max, memory_max, storage_size, single_tenant, customer_disk_gib,
            ipv6_mode, ipv6_subnet, ipv6_gateway, ipv6_parent_interface,
            instance_type, tags, nat_ports_used_count,
            created_at, updated_at
@@ -844,6 +844,8 @@ export async function selectAndReserveHostWithLock(
     cpu_allowance_max: number | null
     memory_max: number | null
     storage_size: number | null
+    single_tenant: boolean
+    customer_disk_gib: number | null
     ipv6_mode: number
     ipv6_subnet: string | null
     ipv6_gateway: string | null
@@ -859,6 +861,10 @@ export async function selectAndReserveHostWithLock(
 
   // 遍历候选宿主机，检查资源并预占
   for (const host of hosts) {
+    if (host.single_tenant && !await tx.host.count({ where: { id: host.id, ...dedicatedHostReadyWhere() } })) continue
+    if (host.single_tenant && await tx.instanceTask.count({ where: hostPendingMoveWhere(host.id, options.instanceId) }) > 0) continue
+    if (host.single_tenant && await tx.instance.count({ where: { hostId: host.id, ...HOST_OCCUPIED_INSTANCE_WHERE } }) > 0) continue
+    if (host.customer_disk_gib !== null && disk > host.customer_disk_gib * 1024) continue
     // storage pool gate: a host without any instance_data pool cannot host new instances
     const instanceDataPoolCount = await tx.storagePool.count({
       where: { hostId: host.id, purpose: 'instance_data' }

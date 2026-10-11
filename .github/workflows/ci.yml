@@ -58,13 +58,18 @@ jobs:
           DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/incudal_test_onboarding
 
       - name: Test host onboarding and inventory
-        run: pnpm --filter server exec tsx --test scripts/test-host-onboarding.ts
+        run: pnpm --filter server exec tsx --test scripts/test-host-onboarding.ts scripts/test-host-resources.ts scripts/test-main-update.ts
         env:
           ONBOARDING_TEST_DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/incudal_test_onboarding
           DB_IDLE_TIMEOUT: '1000'
 
       - name: Test restricted onboarding gateway
         run: python3 scripts/test-onboarding-gateway.py
+
+      - name: Test host swap and panel updater
+        run: |
+          python3 scripts/test-host-swap.py
+          python3 scripts/test-panel-updater.py
 
       - name: Lint
         run: pnpm lint

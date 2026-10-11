@@ -1,4 +1,4 @@
-import type { OnboardingInputNode } from '@/types/api'
+import type { OnboardingInputNode, ResourcePreset } from '@/types/api'
 
 export class OnboardingCsvError extends Error {
   constructor(public readonly code: string, public readonly row = 0) { super(code) }
@@ -35,7 +35,7 @@ export function parseHostOnboardingCsv(text: string): OnboardingInputNode[] {
   if (quoted) throw new OnboardingCsvError('CSV_INVALID', records.length + 1)
   if (record.length || field || closed) finishRecord()
   const headers = records.shift()?.map(value => value.trim()) || []
-  const allowed = new Set(['name', 'publicIp', 'sshPort', 'sshFingerprint', 'password', 'privateKey', 'machineGroup', 'regionGroup', 'countryCode'])
+  const allowed = new Set(['name', 'publicIp', 'sshPort', 'sshFingerprint', 'password', 'privateKey', 'machineGroup', 'regionGroup', 'countryCode', 'resourcePreset', 'customerDiskGiB'])
   if (!headers.includes('name') || !headers.includes('publicIp') || new Set(headers).size !== headers.length || headers.some(header => !allowed.has(header))) throw new OnboardingCsvError('CSV_HEADERS')
   const names = new Set<string>(), addresses = new Set<string>()
   return records.map((fields, index) => {
@@ -50,11 +50,17 @@ export function parseHostOnboardingCsv(text: string): OnboardingInputNode[] {
     const sshFingerprint = values.sshFingerprint?.trim() || undefined
     const machineGroup = values.machineGroup?.trim() || undefined, regionGroup = values.regionGroup?.trim() || undefined
     const countryCode = values.countryCode?.trim().toLowerCase() || undefined
+    const preset = values.resourcePreset?.trim().toUpperCase() || undefined
+    if (preset && !['AUTO', 'E2', 'ARM1C', 'ARM2C', 'ARM3C', 'ARM4C'].includes(preset)) throw new OnboardingCsvError('RESOURCE_PRESET_INVALID', row)
+    const disk = values.customerDiskGiB?.trim()
+    if (disk && (!/^\d+$/.test(disk) || Number(disk) < 10 || Number(disk) > 10000)) throw new OnboardingCsvError('CUSTOMER_DISK_INVALID', row)
     if ([machineGroup, regionGroup].some(group => group && (group.length > 60 || [...group].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)))) throw new OnboardingCsvError('HOST_GROUP_INVALID', row)
     if (countryCode && !/^[a-z]{2}$/.test(countryCode)) throw new OnboardingCsvError('BATCH_DEFAULTS_INVALID', row)
     if (sshFingerprint && !/^SHA256:[A-Za-z0-9+/]{43}$/.test(sshFingerprint)) throw new OnboardingCsvError('SSH_FINGERPRINT_INVALID', row)
     if (names.has(name) || addresses.has(publicIp)) throw new OnboardingCsvError('DUPLICATE_IMPORT_ROW', row)
     names.add(name); addresses.add(publicIp)
-    return { name, publicIp, sshPort: Number(port), sshFingerprint, machineGroup, regionGroup, countryCode, password: values.password || undefined, privateKey: values.privateKey || undefined }
+    return { name, publicIp, sshPort: Number(port), sshFingerprint, machineGroup, regionGroup, countryCode,
+      ...(preset ? { resourcePreset: preset === 'AUTO' ? null : preset as ResourcePreset } : {}),
+      ...(disk ? { customerDiskGiB: Number(disk) } : {}), password: values.password || undefined, privateKey: values.privateKey || undefined }
   })
 }

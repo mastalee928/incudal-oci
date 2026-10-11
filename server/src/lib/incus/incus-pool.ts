@@ -129,7 +129,7 @@ export async function getIncusClient(host: Host): Promise<IncusClient> {
         serverFingerprint: host.server_fingerprint || host.serverFingerprint || null,
         allowPrivateNetwork: host.allow_private_network ?? host.allowPrivateNetwork ?? false
       })
-
+      client.hostId = host.id
       await client.connect()
       
       clientPool.set(key, {

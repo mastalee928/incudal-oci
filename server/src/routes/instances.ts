@@ -5389,6 +5389,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
     // 检查宿主机资源是否足够（克隆会消耗与源实例相同的资源）
     const hostWithQuota = host as typeof host & { cpu_allowance_max?: number; memory_max?: number; storage_size?: number }
+    if (await prisma.host.count({ where: { id: host.id, singleTenant: true } })) {
+      return reply.code(409).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT, 'A dedicated host can contain only one customer instance'))
+    }
     const cpuAvailable = (hostWithQuota.cpu_allowance_max || 0) - (host.cpu_used || 0)
     const memoryAvailable = (hostWithQuota.memory_max || 0) - (host.memory_used || 0)
     const diskAvailable = ((hostWithQuota.storage_size || 0) * 1024) - (host.disk_used || 0)

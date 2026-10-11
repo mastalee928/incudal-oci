@@ -9,6 +9,7 @@ import type { BuildInstanceConfigOptions, IPv6Config } from '../../types/incus.j
 import { buildNetworkDevices, generateCloudInitNetworkConfig, hasIpv6Support } from '../network-payload-builder.js'
 import { generateVmNicMacs } from '../vm-network-identifiers.js'
 import { resolveIncusSwapValue } from '../instance-swap.js'
+import { assertHostCustomerResources, prepareHostInstanceConfig } from '../../services/host-customer-resources.js'
 
 const INSTANCE_BUSY_WAIT_TIMEOUT_MS = 300000
 const INSTANCE_BUSY_POLL_INTERVAL_MS = 2000
@@ -317,7 +318,8 @@ export async function createInstance(client: IncusClient, config: unknown): Prom
   // Pulling a remote image and creating a VM can take longer than the client
   // default of two minutes. The operation must finish before we try to start
   // the instance or settle a failed purchase.
-  return client.request('POST', '/1.0/instances', config, INSTANCE_CREATE_TIMEOUT_MS)
+  const payload = client.hostId === undefined ? config : await prepareHostInstanceConfig(client.hostId, config)
+  return client.request('POST', '/1.0/instances', payload, INSTANCE_CREATE_TIMEOUT_MS)
 }
 
 /** Wait until a completed create is visible before issuing the start action. */
@@ -580,6 +582,8 @@ export async function patchInstanceResources(
   }
 ): Promise<unknown> {
   const patchData: { config?: Record<string, string>; devices?: Record<string, unknown> } = {}
+  const dedicated = client.hostId !== undefined && await assertHostCustomerResources(client.hostId, name, resources)
+  const unit = dedicated ? 'MiB' : 'MB'
 
   // 更新 CPU 配置
   if (resources.cpu !== undefined) {
@@ -591,7 +595,7 @@ export async function patchInstanceResources(
   // 更新内存配置
   if (resources.memory !== undefined) {
     patchData.config = patchData.config || {}
-    patchData.config['limits.memory'] = `${resources.memory}MB`
+    patchData.config['limits.memory'] = `${resources.memory}${unit}`
   }
 
   // 更新磁盘配置
@@ -606,7 +610,7 @@ export async function patchInstanceResources(
         path: '/',
         pool: currentRoot.pool || 'default',
         type: 'disk',
-        size: `${resources.disk}MB`
+        size: `${resources.disk}${unit}`
       }
     }
   }

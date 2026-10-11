@@ -222,6 +222,10 @@ databaseTest('batch routes require admin access and protocol changes enforce hos
       ['GET', '/api/host-onboarding/', undefined], ['GET', '/api/host-onboarding', undefined], ['GET', '/api/host-onboarding/gateway', undefined],
       ['POST', '/api/host-onboarding/', valid()], ['POST', '/api/host-onboarding/nodes/test/retry', {}], ['POST', '/api/host-onboarding/nodes/test/cancel', undefined],
       ['GET', '/api/host-onboarding/inventory', undefined], ['PATCH', '/api/host-onboarding/inventory/groups', { hostIds: [2], machineGroup: 'ARM' }],
+      ['GET', '/api/host-onboarding/groups', undefined], ['POST', '/api/host-onboarding/groups/machines', { name: 'blocked' }],
+      ['PATCH', '/api/host-onboarding/groups/machines/1', { name: 'blocked' }], ['DELETE', '/api/host-onboarding/groups/machines/1', undefined],
+      ['POST', '/api/host-onboarding/groups/regions', { machineGroupId: 1, name: 'blocked' }], ['DELETE', '/api/host-onboarding/groups/regions/1', undefined],
+      ['DELETE', '/api/host-onboarding/nodes/test', undefined],
       ['GET', `/api/hosts/${host.id}/port-protocol`, undefined], ['PATCH', `/api/hosts/${host.id}/port-protocol`, { protocol: 'tcp' }]
     ] as const) assert.equal((await app.inject({ method, url, payload })).statusCode, 403)
   } finally { await app.close(); await prisma.user.delete({ where: { id: owner.id } }) }
@@ -339,4 +343,214 @@ databaseTest('worker recovers expired leases, leaves live leases alone and clear
     assert.equal(rows.find(row => row.name === 'active')?.status, 'running')
     assert.ok(rows.filter(row => row.status === 'failed').every(row => row.errorCode === 'ADMIN_REQUIRED'))
   } finally { await worker.stopHostOnboardingWorker(); await prisma.hostOnboardingBatch.delete({ where: { id: batch.id } }); await prisma.user.delete({ where: { id: owner.id } }) }
+})
+
+databaseTest('group CRUD preserves empty groups, stable assignments and customer instances', async () => {
+  const { prisma } = await import('../src/db/prisma.js')
+  const { default: routes } = await import('../src/routes/host-onboarding.js')
+  const owner = await prisma.user.create({ data: { username: 'groups-' + randomUUID(), passwordHash: 'test-only', role: 'admin' } })
+  const customer = await prisma.user.create({ data: { username: 'buyer-' + randomUUID(), passwordHash: 'test-only' } })
+  const app = Fastify()
+  app.decorate('authenticateAdmin', async (request: any) => { request.user = { id: owner.id, role: 'admin' } })
+  await app.register(routes, { prefix: '/api/host-onboarding' })
+  let groupId = 0
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/host-onboarding/groups/machines', payload: { name: 'fixture-' + randomUUID() } })
+    assert.equal(created.statusCode, 201, created.body)
+    const group = created.json(); groupId = group.id
+    const emptyInventory = (await app.inject({ url: '/api/host-onboarding/inventory' })).json()
+    assert.deepEqual(emptyInventory.groups.find((g: any) => g.id === groupId).counts, { total: 0, available: 0, assigned: 0, unavailable: 0 })
+    assert.equal((await app.inject({ method: 'POST', url: '/api/host-onboarding/groups/machines', payload: { name: group.name } })).statusCode, 409)
+    const region = (await app.inject({ method: 'POST', url: '/api/host-onboarding/groups/regions', payload: { machineGroupId: groupId, name: 'Phoenix', countryCode: 'us' } })).json()
+    const host = await prisma.host.create({ data: { userId: owner.id, name: 'assigned', url: 'https://10.253.240.61:8443', status: 'online', isInstalled: true } })
+    const instance = await prisma.instance.create({ data: { userId: customer.id, hostId: host.id, incusId: randomUUID(), name: 'customer-instance', image: 'fixture', cpu: 100, memory: 768, disk: 30720, status: 'stopped' } })
+    const batch = await prisma.hostOnboardingBatch.create({ data: { id: randomUUID(), createdById: owner.id, name: 'group fixture', accountLabel: '', defaults: {}, nodes: { create: { name: host.name, publicIp: '208.67.222.222', status: 'succeeded', hostId: host.id, credentialsExpireAt: new Date(0) } } } })
+    await prisma.host.create({ data: { userId: owner.id, name: 'free', url: 'https://10.253.240.64:8443', status: 'online', isInstalled: true, machineGroupId: groupId, regionGroupId: region.id } })
+    await prisma.host.create({ data: { userId: owner.id, name: 'offline', url: 'https://10.253.240.65:8443', status: 'offline', isInstalled: true, machineGroupId: groupId, regionGroupId: region.id } })
+    const assigned = await app.inject({ method: 'PATCH', url: '/api/host-onboarding/inventory/groups', payload: { hostIds: [host.id], machineGroupId: groupId, regionGroupId: region.id } })
+    assert.equal(assigned.statusCode, 200, assigned.body)
+    assert.equal((await app.inject({ method: 'PATCH', url: `/api/host-onboarding/groups/machines/${groupId}`, payload: { name: group.name + '-renamed' } })).statusCode, 200)
+    assert.equal((await app.inject({ method: 'PATCH', url: `/api/host-onboarding/groups/regions/${region.id}`, payload: { name: '凤凰城', countryCode: 'us' } })).statusCode, 200)
+    const inventory = (await app.inject({ url: `/api/host-onboarding/inventory?machineGroupId=${groupId}&stock=assigned` })).json()
+    assert.equal(inventory.total, 1)
+    assert.deepEqual(inventory.groups.find((g: any) => g.id === groupId).counts, { total: 3, available: 1, assigned: 1, unavailable: 1 })
+    assert.equal(inventory.hosts[0].machineGroup, group.name + '-renamed')
+    assert.equal(inventory.hosts[0].regionGroup, '凤凰城')
+    assert.equal(inventory.hosts[0].instances[0].user.username, customer.username)
+    assert.equal((await prisma.hostOnboardingNode.findFirstOrThrow({ where: { batchId: batch.id } })).regionGroup, '凤凰城')
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/host-onboarding/groups/regions/${region.id}` })).statusCode, 200)
+    assert.equal((await prisma.host.findUniqueOrThrow({ where: { id: host.id } })).regionGroupId, null)
+    // IDs take precedence over stale compatibility labels, including explicit nulls.
+    const idWins = await app.inject({ method: 'PATCH', url: '/api/host-onboarding/inventory/groups', payload: { hostIds: [host.id], machineGroupId: groupId, machineGroup: null, regionGroupId: null, regionGroup: 'stale' } })
+    assert.equal(idWins.statusCode, 200, idWins.body)
+    assert.equal((await prisma.host.findUniqueOrThrow({ where: { id: host.id } })).machineGroupId, groupId)
+    assert.equal(await prisma.hostRegionGroup.count({ where: { machineGroupId: groupId } }), 0)
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/host-onboarding/groups/machines/${groupId}` })).statusCode, 200)
+    assert.equal((await prisma.host.findUniqueOrThrow({ where: { id: host.id } })).machineGroupId, null)
+    assert.equal((await prisma.instance.findUniqueOrThrow({ where: { id: instance.id } })).userId, customer.id)
+  } finally {
+    await app.close()
+    await prisma.instance.deleteMany({ where: { userId: customer.id } })
+    await prisma.hostOnboardingBatch.deleteMany({ where: { createdById: owner.id } })
+    await prisma.user.deleteMany({ where: { id: { in: [owner.id, customer.id] } } })
+    if (groupId) await prisma.hostMachineGroup.deleteMany({ where: { id: groupId } })
+  }
+})
+
+databaseTest('finished tasks can be removed without deleting hosts, and removed failed imports can be revived', async () => {
+  const { prisma } = await import('../src/db/prisma.js')
+  const { default: routes } = await import('../src/routes/host-onboarding.js')
+  const owner = await prisma.user.create({ data: { username: 'delete-' + randomUUID(), passwordHash: 'test-only', role: 'admin' } })
+  const host = await prisma.host.create({ data: { userId: owner.id, name: 'retained-host', url: 'https://10.253.240.62:8443' } })
+  const app = Fastify()
+  app.decorate('authenticateAdmin', async (request: any) => { request.user = { id: owner.id, role: 'admin' } })
+  await app.register(routes, { prefix: '/api/host-onboarding' })
+  try {
+    const batch = await prisma.hostOnboardingBatch.create({ data: { id: randomUUID(), createdById: owner.id, name: 'delete fixture', accountLabel: '', defaults: {}, nodes: { create: [
+      { name: 'succeeded', publicIp: '208.67.220.220', status: 'succeeded', hostId: host.id, credentialsExpireAt: new Date(0) },
+      { name: 'failed', publicIp: '8.26.56.26', status: 'failed', credentialsEncrypted: 'must-be-cleared', managementIp: '10.253.240.62', sshFingerprint: fingerprint, credentialsExpireAt: new Date(0) },
+      { name: 'running', publicIp: '8.20.247.20', status: 'running', credentialsExpireAt: new Date(0) },
+      { name: 'queued', publicIp: '9.9.9.11', status: 'queued', credentialsExpireAt: new Date(0) }
+    ] } }, include: { nodes: true } })
+    for (const node of batch.nodes) {
+      const response = await app.inject({ method: 'DELETE', url: `/api/host-onboarding/nodes/${node.id}` })
+      assert.equal(response.statusCode, ['succeeded', 'failed'].includes(node.status) ? 200 : 409)
+    }
+    const removed = batch.nodes.find(n => n.name === 'failed')!
+    const saved = await prisma.hostOnboardingNode.findUniqueOrThrow({ where: { id: removed.id } })
+    assert.ok(saved.deletedAt); assert.equal(saved.credentialsEncrypted, null)
+    assert.equal(saved.managementIp, '10.253.240.62')
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/host-onboarding/nodes/${removed.id}` })).statusCode, 200)
+    assert.equal((await app.inject({ method: 'POST', url: `/api/host-onboarding/nodes/${removed.id}/retry`, payload: { password: 'test-only' } })).statusCode, 404)
+    assert.ok(await prisma.host.findUnique({ where: { id: host.id } }))
+    const listed = (await app.inject({ url: '/api/host-onboarding' })).json()
+    assert.ok(!listed.batches.flatMap((b: any) => b.nodes).some((n: any) => n.id === removed.id))
+    const input = valid(); input.nodes = [{ name: 'revived', publicIp: removed.publicIp }]
+    const revived = await app.inject({ method: 'POST', url: '/api/host-onboarding', payload: input })
+    assert.equal(revived.statusCode, 202, revived.body)
+    const next = await prisma.hostOnboardingNode.findUniqueOrThrow({ where: { id: removed.id } })
+    assert.equal(next.deletedAt, null); assert.equal(next.status, 'queued'); assert.equal(next.batchId, input.requestId)
+    assert.equal(next.sshFingerprint, fingerprint); assert.equal(next.managementIp, saved.managementIp)
+  } finally {
+    await app.close(); await prisma.hostOnboardingBatch.deleteMany({ where: { createdById: owner.id } }); await prisma.user.delete({ where: { id: owner.id } })
+  }
+})
+
+databaseTest('retry and delete compete atomically and cannot resurrect a removed task', async () => {
+  const { prisma } = await import('../src/db/prisma.js')
+  const { default: routes } = await import('../src/routes/host-onboarding.js')
+  const owner = await prisma.user.create({ data: { username: 'race-' + randomUUID(), passwordHash: 'test-only', role: 'admin' } })
+  const app = Fastify()
+  app.decorate('authenticateAdmin', async (request: any) => { request.user = { id: owner.id, role: 'admin' } })
+  await app.register(routes, { prefix: '/api/host-onboarding' })
+  try {
+    for (let i = 0; i < 3; i++) {
+      const batch = await prisma.hostOnboardingBatch.create({ data: { id: randomUUID(), createdById: owner.id, name: 'race', accountLabel: '', defaults: {}, nodes: { create: { name: 'race-node', publicIp: '9.9.9.' + (20 + i), status: 'failed', credentialsExpireAt: new Date(0) } } }, include: { nodes: true } })
+      const id = batch.nodes[0].id
+      const [retry, removed] = await Promise.all([
+        app.inject({ method: 'POST', url: `/api/host-onboarding/nodes/${id}/retry`, payload: { password: 'test-only' } }),
+        app.inject({ method: 'DELETE', url: `/api/host-onboarding/nodes/${id}` })
+      ])
+      const node = await prisma.hostOnboardingNode.findUniqueOrThrow({ where: { id } })
+      if (removed.statusCode === 200) {
+        assert.ok([404, 409].includes(retry.statusCode)); assert.ok(node.deletedAt); assert.equal(node.credentialsEncrypted, null)
+      } else {
+        assert.equal(removed.statusCode, 409); assert.equal(retry.statusCode, 200); assert.equal(node.deletedAt, null); assert.equal(node.status, 'queued')
+      }
+    }
+  } finally {
+    await app.close(); await prisma.hostOnboardingBatch.deleteMany({ where: { createdById: owner.id } }); await prisma.user.delete({ where: { id: owner.id } })
+  }
+})
+
+databaseTest('dedicated allocation is exclusive, respects customer quotas and waits for pending cleanup', async () => {
+  const { prisma } = await import('../src/db/prisma.js')
+  const { selectAvailableHost, selectAndReserveHostWithLock } = await import('../src/db/hosts.js')
+  const owner = await prisma.user.create({ data: { username: 'allocation-' + randomUUID(), passwordHash: 'test-only' } })
+  const host = await prisma.host.create({ data: { userId: owner.id, name: 'dedicated', url: 'https://10.253.240.63:8443', status: 'online', isInstalled: true, singleTenant: true, cpuAllowanceMax: 400, memoryMax: 16384, customerDiskGiB: 30, storageSize: 34, storagePools: { create: { name: 'default', driver: 'btrfs' } } } })
+  const data = { userId: owner.id, hostId: host.id, incusId: randomUUID(), name: 'instance', image: 'fixture', cpu: 25, memory: 256, disk: 10240 }
+  const options = { hostId: host.id, cpu: data.cpu, memory: data.memory, disk: data.disk }
+  try {
+    assert.equal(await selectAvailableHost({ ...options, disk: 31 * 1024 }), null)
+    assert.equal(await prisma.$transaction(tx => selectAndReserveHostWithLock(tx, { ...options, disk: 31 * 1024 })), null)
+    await assert.rejects(prisma.instance.create({ data: { ...data, disk: 31 * 1024 } }), /HOST_CUSTOMER_DISK_EXCEEDED/)
+    const allocate = () => prisma.$transaction(async tx => {
+      const selected = await selectAndReserveHostWithLock(tx, options)
+      return selected ? tx.instance.create({ data: { ...data, incusId: randomUUID() } }) : null
+    }, { timeout: 15000 })
+    const attempts = await Promise.all([allocate(), allocate()])
+    assert.equal(attempts.filter(Boolean).length, 1)
+    const instance = attempts.find(Boolean)!
+    await assert.rejects(prisma.instance.create({ data: { ...data, incusId: randomUUID() } }), /HOST_SINGLE_TENANT_OCCUPIED/)
+    await assert.rejects(prisma.instance.update({ where: { id: instance.id }, data: { disk: 31 * 1024 } }), /HOST_CUSTOMER_DISK_EXCEEDED/)
+    await assert.rejects(prisma.instance.update({ where: { id: instance.id }, data: { memory: 17000 } }), /HOST_CUSTOMER_MEMORY_EXCEEDED/)
+    await prisma.instance.update({ where: { id: instance.id }, data: { status: 'deleted', provisioningCleanupPending: true } })
+    assert.equal(await selectAvailableHost(options), null)
+    assert.equal(await allocate(), null)
+    await prisma.instance.update({ where: { id: instance.id }, data: { provisioningCleanupPending: false, deletionBillingPending: true } })
+    assert.equal(await allocate(), null)
+    await prisma.instance.update({ where: { id: instance.id }, data: { deletionBillingPending: false } })
+    // Imports bypass the selector, so the database must arbitrate those too.
+    const direct = await Promise.allSettled([1, 2].map(() => prisma.instance.create({ data: { ...data, incusId: randomUUID() } })))
+    assert.equal(direct.filter(result => result.status === 'fulfilled').length, 1)
+    assert.equal(direct.filter(result => result.status === 'rejected' && String(result.reason).includes('HOST_SINGLE_TENANT_OCCUPIED')).length, 1)
+  } finally {
+    await prisma.instance.deleteMany({ where: { hostId: host.id } }); await prisma.user.delete({ where: { id: owner.id } })
+  }
+})
+
+databaseTest('pending moves reserve dedicated stock, quotas stop before Incus, and binary units stay exact', async () => {
+  const { prisma } = await import('../src/db/prisma.js')
+  const { selectAvailableHost, selectAndReserveHostWithLock } = await import('../src/db/hosts.js')
+  const { createInstance, patchInstanceResources } = await import('../src/lib/incus/incus-instances.js')
+  const owner = await prisma.user.create({ data: { username: 'limits-' + randomUUID(), passwordHash: 'test-only' } })
+  const source = await prisma.host.create({ data: { userId: owner.id, name: 'source', url: 'https://10.253.240.66:8443' } })
+  const target = await prisma.host.create({ data: { userId: owner.id, name: 'target', url: 'https://10.253.240.67:8443', status: 'online', isInstalled: true,
+    singleTenant: true, cpuAllowanceMax: 100, memoryMax: 768, customerDiskGiB: 30, storagePools: { create: { name: 'default', driver: 'btrfs' } } } })
+  const data = { userId: owner.id, incusId: randomUUID(), name: 'fixture', image: 'fixture', cpu: 25, memory: 512, disk: 10240 }
+  const options = { hostId: target.id, cpu: data.cpu, memory: data.memory, disk: data.disk }
+  try {
+    const instance = await prisma.instance.create({ data: { ...data, hostId: source.id } })
+    const task = await prisma.instanceTask.create({ data: { instanceId: instance.id, hostId: source.id, targetHostId: target.id, userId: owner.id, taskType: 'change_host' } })
+    assert.equal(await selectAvailableHost(options), null)
+    assert.equal(await prisma.$transaction(tx => selectAndReserveHostWithLock(tx, options)), null)
+    await assert.rejects(prisma.instance.create({ data: { ...data, incusId: randomUUID(), hostId: target.id } }), /HOST_SINGLE_TENANT_OCCUPIED/)
+    const own = await prisma.$transaction(tx => selectAndReserveHostWithLock(tx, { ...options, instanceId: instance.id }))
+    assert.equal(own?.id, target.id)
+    await prisma.instance.update({ where: { id: instance.id }, data: { hostId: target.id } })
+    await prisma.instanceTask.update({ where: { id: task.id }, data: { status: 'COMPLETED' } })
+    const calls: Array<{ method: string; path: string; payload: any }> = []
+    const client = { hostId: target.id, request: async (method: string, path: string, payload: any) => { calls.push({ method, path, payload }); return { devices: { root: { pool: 'default' } } } } } as any
+    for (const resources of [{ disk: 31 * 1024 }, { memory: 769 }, { cpu: 101 }]) {
+      await assert.rejects(patchInstanceResources(client, instance.incusId, resources), /HOST_CUSTOMER_(DISK|MEMORY|CPU)_EXCEEDED/)
+      assert.equal(calls.length, 0, 'No remote read or mutation may precede quota validation')
+    }
+    await patchInstanceResources(client, instance.incusId, { memory: 768, disk: 30 * 1024 })
+    const patched = calls.find(call => call.method === 'PATCH')!
+    assert.equal(patched.payload.config['limits.memory'], '768MiB')
+    assert.equal(patched.payload.devices.root.size, '30720MiB')
+    const config = { name: 'fixture', config: { 'limits.memory': '768MB' }, devices: { root: { size: '30720MB', pool: 'default', type: 'disk' } } }
+    await createInstance(client, config)
+    const created = calls.find(call => call.method === 'POST')!
+    assert.equal(created.payload.config['limits.memory'], '768MiB')
+    assert.equal(created.payload.devices.root.size, '30720MiB')
+    assert.equal(config.config['limits.memory'], '768MB', 'Do not mutate the stored task payload')
+    calls.length = 0
+    await createInstance({ ...client, hostId: source.id }, config)
+    assert.equal(calls[0].payload.config['limits.memory'], '768MB', 'Preserve legacy non-dedicated behavior')
+    await prisma.instance.delete({ where: { id: instance.id } })
+    const batch = await prisma.hostOnboardingBatch.create({ data: { id: randomUUID(), createdById: owner.id, name: 'readiness', accountLabel: '', defaults: {},
+      nodes: { create: { hostId: target.id, name: 'target', publicIp: '9.9.9.31', status: 'failed', credentialsExpireAt: new Date(0) } } }, include: { nodes: true } })
+    assert.equal(await selectAvailableHost(options), null)
+    const agent = await prisma.hostAgent.create({ data: { hostId: target.id, agentId: randomUUID(), secretHash: 'fixture', secretEncrypted: 'fixture', lastSeenAt: new Date() } })
+    assert.equal(await selectAvailableHost(options), null, 'An unfinished onboarding task is not saleable')
+    await prisma.hostOnboardingNode.update({ where: { id: batch.nodes[0].id }, data: { status: 'succeeded' } })
+    assert.equal((await selectAvailableHost(options))?.id, target.id)
+    await prisma.hostAgent.update({ where: { id: agent.id }, data: { enabled: false } })
+    assert.equal(await selectAvailableHost(options), null)
+  } finally {
+    await prisma.instance.deleteMany({ where: { userId: owner.id } })
+    await prisma.hostOnboardingBatch.deleteMany({ where: { createdById: owner.id } })
+    await prisma.user.delete({ where: { id: owner.id } })
+  }
 })

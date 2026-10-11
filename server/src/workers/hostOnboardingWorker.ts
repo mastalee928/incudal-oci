@@ -15,6 +15,8 @@ import { panelCertificatePaths } from '../lib/incus/incus-tls.js'
 import { IncusClient } from '../lib/incus/index.js'
 import { normalizeArchitecture } from '../lib/architecture.js'
 import { PORT_PROTOCOL_CAPABILITY } from '../services/host-port-protocol.js'
+import { parseResourceProbe, resolveHostResources, type ResolvedHostResources } from '../lib/onboarding-resources.js'
+import { lockHostGroups, resolveHostGroups } from '../services/host-groups.js'
 
 let timer: ReturnType<typeof setInterval> | undefined
 let ticking = false
@@ -27,7 +29,7 @@ async function claim() {
   return prisma.$transaction(async tx => {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM host_onboarding_nodes
-      WHERE status = 'queued' OR (status = 'running' AND lease_until < NOW())
+      WHERE deleted_at IS NULL AND (status = 'queued' OR (status = 'running' AND lease_until < NOW()))
       ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1`
     if (!rows[0]) return null
     const current = await tx.hostOnboardingNode.findUniqueOrThrow({ where: { id: rows[0].id } })
@@ -84,6 +86,22 @@ async function runNode(node: NonNullable<Awaited<ReturnType<typeof claim>>>) {
     await sshExec(ssh, 'sh -s', preflightScript(node.id))
     await checkpoint('tunnel')
     const prepared = await sshExec(ssh, 'sh -s', prepareKeyScript(node.id), 240000)
+    await checkpoint('resources')
+    let resources = node.resolvedResources as unknown as ResolvedHostResources | null
+    if (!resources) {
+      const probeScript = await readFile(fileURLToPath(new URL('../../../scripts/probe-onboarding-resources.py', import.meta.url)), 'utf8')
+      const probe = parseResourceProbe(await sshExec(ssh, 'python3 -', probeScript))
+      resources = node.host ? {
+        version: 1, detectedAt: new Date().toISOString(), probe, resourcePreset: null,
+        cpuAllowanceMax: node.host.cpuAllowanceMax, memoryMax: node.host.memoryMax, storageSize: node.host.storageSize,
+        customerDiskGiB: node.host.customerDiskGiB, memoryReserveMiB: probe.memoryMiB - node.host.memoryMax, diskReserveGiB: 4
+      } : resolveHostResources(probe, { ...defaults, resourcePreset: node.resourcePreset as OnboardingDefaults['resourcePreset'],
+        customerDiskGiB: node.customerDiskGiB ?? defaults.customerDiskGiB })
+      await checkpoint('resources', { resolvedResources: resources as unknown as Prisma.InputJsonObject })
+    }
+    await checkpoint('swap')
+    const swapScript = await readFile(fileURLToPath(new URL('../../../scripts/ensure-host-swap.py', import.meta.url)), 'utf8')
+    await sshExec(ssh, 'python3 -', swapScript, 180000)
     const publicKey = prepared.match(/INCUDAL_PUBLIC_KEY:([A-Za-z0-9+/]{43}=)/)?.[1]
     const bindIp = prepared.match(/INCUDAL_BIND_IP:([0-9.]+)/)?.[1]
     if (!publicKey || !bindIp || !isIPv4(bindIp)) throw new OnboardingError('NODE_NETWORK_INVALID')
@@ -104,16 +122,20 @@ async function runNode(node: NonNullable<Awaited<ReturnType<typeof claim>>>) {
       host = await withHostAddressRegistryLock(async () => {
         const snapshot = await prepareHostAddressSnapshotForWrite(url)
         return prisma.$transaction(async tx => {
+          await lockHostGroups(tx)
           const duplicate = await tx.host.findFirst({ where: { OR: [{ natPublicIp: node.publicIp }, { ipAddress: node.publicIp }] }, select: { id: true } })
           if (duplicate) throw new OnboardingError('HOST_ALREADY_REGISTERED')
+          // Group edits made while SSH setup runs must be reflected in the new host.
+          const currentNode = await tx.hostOnboardingNode.findUniqueOrThrow({ where: { id: node.id } })
+          const groups = await resolveHostGroups(tx, { machineGroupId: currentNode.machineGroupId, regionGroupId: currentNode.regionGroupId })
           const created = await tx.host.create({ data: {
             userId: node.batch.createdById, name: node.name, url, location: node.batch.accountLabel,
             countryCode: node.countryCode || defaults.countryCode, tags: ['oci', node.batch.accountLabel],
-            machineGroup: node.machineGroup || defaults.machineGroup?.trim() || null,
-            regionGroup: node.regionGroup || defaults.regionGroup?.trim() || null,
+            ...groups, singleTenant: true, resourcePreset: resources!.resourcePreset, customerDiskGiB: resources!.customerDiskGiB,
+            resourceSnapshot: resources as unknown as Prisma.InputJsonObject, architecture: resources!.probe.architecture,
             natPublicIp: node.publicIp, natBindIp: bindIp, ipAddress: node.publicIp, natPortStart: 1, natPortEnd: 65535,
-            ...panelCertificatePaths(), allowPrivateNetwork: true, storageDriver: 'btrfs', storageType: 'loop', storageSize: defaults.storageSize,
-            ipv6Mode: 3, enableResourcePool: false, instanceType: 'container', cpuAllowanceMax: defaults.cpuAllowanceMax, memoryMax: defaults.memoryMax,
+            ...panelCertificatePaths(), allowPrivateNetwork: true, storageDriver: 'btrfs', storageType: 'loop', storageSize: resources!.storageSize,
+            ipv6Mode: 3, enableResourcePool: false, instanceType: 'container', cpuAllowanceMax: resources!.cpuAllowanceMax, memoryMax: resources!.memoryMax,
             portProtocol: defaults.portProtocol, portProtocolAppliedRevision: defaults.portProtocol === 'tcp' ? 0 : 1,
             installToken: randomUUID(), installTokenExpire: new Date(Date.now() + 24 * 60 * 60 * 1000), certDownloadExpire: new Date(Date.now() + 60 * 60 * 1000)
           } })
@@ -131,7 +153,7 @@ async function runNode(node: NonNullable<Awaited<ReturnType<typeof claim>>>) {
         if (node.attempt < 2) throw new OnboardingError('INSTALL_SESSION_EXPIRED')
         host = await prisma.host.update({ where: { id: host.id }, data: { installToken: randomUUID(), installTokenExpire: new Date(Date.now() + 86400000), certDownloadExpire: new Date(Date.now() + 3600000), certDownloadCount: 0 } })
       }
-      await sshExec(ssh, 'sh -s', installerStartScript(node.id, node.attempt, `${panelOrigin}/api/hosts/install.sh/${host.installToken}`, defaults), 150000)
+      await sshExec(ssh, 'sh -s', installerStartScript(node.id, node.attempt, `${panelOrigin}/api/hosts/install.sh/${host.installToken}`, { storageSize: host.storageSize }), 150000)
       while (true) {
         await checkpoint('installing')
         if (Date.now() - node.startedAt!.getTime() > 45 * 60 * 1000) throw new OnboardingError('INSTALL_TIMEOUT')

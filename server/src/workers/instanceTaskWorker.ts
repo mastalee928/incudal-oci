@@ -506,6 +506,9 @@ async function executeTask(taskId: number): Promise<void> {
 
     const host = await db.getHostById(task.hostId)
     if (!host) throw new Error('宿主机不存在')
+    if (task.taskType === 'clone' && await prisma.host.count({ where: { id: host.id, singleTenant: true } })) {
+      throw new Error('HOST_SINGLE_TENANT_OCCUPIED')
+    }
 
     const clientStartTime = Date.now()
     const client = await getIncusClient(host)
@@ -1788,6 +1791,7 @@ async function executeChangeHostTask(
         disk: instance.disk,
         hostId: targetHostId,
         ownerId: pkg.user_id || targetHost.user_id,
+        instanceId: task.instanceId,
         portCount: 0
       })
     }, {
@@ -2251,6 +2255,7 @@ async function executeChangeHostTask(
             console.warn(`[ChangeHost] 回滚目标节点资源失败:`, rollbackErr)
           }
         } else {
+          await prisma.host.updateMany({ where: { id: targetHostId, singleTenant: true }, data: { status: 'maintenance' } })
           console.warn(`[ChangeHost] 目标实例 ${newIncusId} 未确认清理，暂不释放目标节点 ${targetHost.name} 的资源预占`)
         }
       }

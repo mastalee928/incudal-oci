@@ -164,8 +164,12 @@ fastify.addHook('onRequest', handleSeoMetaRequest)
 
 // 自定义 schema 验证错误处理
 import type { FastifyError } from 'fastify'
+import { isHostAllocationError } from './lib/host-resource-usage.js'
 
 fastify.setErrorHandler((error: FastifyError, _request, reply) => {
+  if (isHostAllocationError(error)) {
+    return reply.code(409).send({ code: 'HOST_RESOURCES_INSUFFICIENT', error: 'Host is occupied or its customer quota would be exceeded' })
+  }
   if ((error as FastifyError & { code?: string }).code === 'ADVISORY_LOCK_BUSY') {
     return reply.code(409).send({
       error: 'Resource is busy, please retry',

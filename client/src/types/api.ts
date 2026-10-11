@@ -758,7 +758,26 @@ export interface OnboardingCredentials {
   password?: string
   privateKey?: string
 }
-export interface OnboardingInputNode extends OnboardingCredentials {
+export type ResourcePreset = 'E2' | 'ARM1C' | 'ARM2C' | 'ARM3C' | 'ARM4C'
+export interface OnboardingResourceInput {
+  resourcePreset?: ResourcePreset | null
+  customerDiskGiB?: number
+  machineGroupId?: number | null
+  regionGroupId?: number | null
+}
+export interface ResolvedHostResources {
+  version: 1
+  detectedAt: string
+  probe: { architecture: 'x86_64' | 'aarch64'; cpuCount: number; memoryMiB: number; diskTotalBytes: string; diskAvailableBytes: string; diskSwapMiB: number }
+  resourcePreset: ResourcePreset | null
+  cpuAllowanceMax: number
+  memoryMax: number
+  customerDiskGiB: number | null
+  storageSize: number
+  memoryReserveMiB: number
+  diskReserveGiB: number
+}
+export interface OnboardingInputNode extends OnboardingCredentials, OnboardingResourceInput {
   name: string
   publicIp: string
   sshPort?: number
@@ -767,13 +786,13 @@ export interface OnboardingInputNode extends OnboardingCredentials {
   regionGroup?: string
   countryCode?: string
 }
-export interface OnboardingDefaults {
+export interface OnboardingDefaults extends OnboardingResourceInput {
   countryCode: string
   machineGroup?: string
   regionGroup?: string
-  storageSize: number
-  cpuAllowanceMax: number
-  memoryMax: number
+  storageSize?: number
+  cpuAllowanceMax?: number
+  memoryMax?: number
   portProtocol: PortProtocol
 }
 export interface CreateOnboardingRequest {
@@ -798,6 +817,11 @@ export interface OnboardingNode {
   sshPort: number
   sshFingerprint: string | null
   managementIp: string | null
+  machineGroupId: number | null
+  regionGroupId: number | null
+  resourcePreset: ResourcePreset | null
+  customerDiskGiB: number | null
+  resolvedResources: ResolvedHostResources | null
   hostId: number | null
   status: OnboardingStatus
   step: string
@@ -844,7 +868,21 @@ export interface ManagedHost {
   instanceCount: number
   portProtocol: PortProtocolState
   agentLastSeenAt: string | null
+  machineGroupId: number | null
+  regionGroupId: number | null
+  resourcePreset: ResourcePreset | null
+  customerDiskGiB: number | null
+  cpuAllowanceMax: number
+  memoryMax: number
+  storageSize: number
+  resourceSnapshot: ResolvedHostResources | null
+  singleTenant: boolean
+  stock: 'available' | 'assigned' | 'unavailable'
+  instances: Array<{ id: number; name: string; status: string; cpu: number; memory: number; disk: number; user: { id: number; username: string } }>
 }
+export interface HostStockCounts { total: number; available: number; assigned: number; unavailable: number }
+export interface HostRegionGroup { id: number; machineGroupId: number; name: string; countryCode: string | null; counts?: HostStockCounts }
+export interface HostMachineGroup { id: number; name: string; regions: HostRegionGroup[]; counts?: HostStockCounts }
 export interface HostInventoryResponse {
   hosts: ManagedHost[]
   total: number
@@ -852,17 +890,25 @@ export interface HostInventoryResponse {
   pageSize: number
   machineGroups: string[]
   regionGroups: string[]
+  groups: HostMachineGroup[]
+  summary: HostStockCounts
+  ungrouped: HostStockCounts
 }
 export interface HostInventoryQuery {
   page?: number
   search?: string
   machineGroup?: string
   regionGroup?: string
+  machineGroupId?: number
+  regionGroupId?: number
+  stock?: ManagedHost['stock']
 }
 export interface UpdateHostGroupsRequest {
   hostIds: number[]
   machineGroup?: string | null
   regionGroup?: string | null
+  machineGroupId?: number | null
+  regionGroupId?: number | null
 }
 
 export interface Host {
@@ -1010,26 +1056,36 @@ export interface SystemUpdateExecution {
   startedAt: string
   finishedAt: string | null
   exitCode: number | null
-  signal: string | null
+  targetCommit: string
+  previousCommit: string | null
+  phase: string
+  rollbackSucceeded?: boolean
   output: string
   error: string | null
 }
 
 export interface SystemUpdateStatusResponse {
   currentVersion: string
+  currentCommit: string | null
+  branch: 'main'
   sourceRepository: string
   sourceUrl: string
   execution: SystemUpdateExecution | null
   executorAvailable: boolean
-  installDirectory: string
+  installDirectory: string | null
+  manualCommand: string | null
 }
 
 export interface SystemUpdateCheckResponse {
   currentVersion: string
+  currentCommit: string | null
   sourceRepository: string
   sourceUrl: string
   latest: {
     version: string
+    commit: string
+    branch: 'main'
+    ci: { status: 'success' | 'pending' | 'failure' | 'unknown'; url: string | null }
     name: string
     url: string
     publishedAt: string | null

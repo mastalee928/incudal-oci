@@ -4,7 +4,7 @@
 
 # Stage 1: 依赖安装
 FROM node:22-alpine AS deps
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.14.2 --activate
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -18,7 +18,7 @@ RUN pnpm rebuild esbuild
 
 # Stage 2: 构建前端
 FROM node:22-alpine AS builder-client
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.14.2 --activate
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -30,7 +30,7 @@ RUN pnpm --filter client build
 
 # Stage 3: 构建后端
 FROM node:22-alpine AS builder-server
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.14.2 --activate
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -70,9 +70,14 @@ COPY server/prisma.config.ts ./server/
 COPY server/prisma ./server/prisma
 COPY server/templates ./server/templates
 COPY scripts/configure-oci-node-network.sh ./scripts/configure-oci-node-network.sh
+COPY scripts/probe-onboarding-resources.py scripts/ensure-host-swap.py ./scripts/
 COPY server/scripts ./server/scripts
 COPY server/src ./server/src
 COPY package.json pnpm-workspace.yaml ./
+
+ARG INCUDAL_COMMIT=unknown
+RUN node -e "const c=process.argv[1]; if(c!=='unknown' && !/^[a-f0-9]{40}$/.test(c)) process.exit(1); require('fs').writeFileSync('server/build-info.json', JSON.stringify({commit:c}))" "$INCUDAL_COMMIT"
+LABEL org.opencontainers.image.revision=$INCUDAL_COMMIT
 
 # 复制启动脚本
 COPY server/docker-entrypoint.sh ./server/

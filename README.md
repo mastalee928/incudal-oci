@@ -82,15 +82,17 @@ Incudal 是一个基于 Incus 的容器与 KVM 虚拟机管理、销售和托管
 
 ## 快速部署
 
+主控使用已安装 Docker Compose、Git、Python 3.9+ 的 Debian/Ubuntu（systemd）。Alpine/Debian 宿主节点通过面板接入，独立于主控安装。
+
 ```bash
 git clone https://github.com/mastalee928/incudal-oci.git
 cd incudal-oci
 cp .env.example .env
 bash scripts/init-env.sh
-docker compose up -d --build
+sudo bash scripts/install-source.sh
 ```
 
-上述命令从本仓库源码构建面板镜像。Git 同步不会复制 GitHub Releases 附件或 GHCR 镜像；预构建部署需先在本仓库发布对应产物，节点接入需先按 [Agent 发布说明](./agent/README.md) 发布本仓库的 Agent。
+上述命令从当前 Git 提交构建镜像、记录运行提交，并安装网页更新所需的主控执行器。执行前请先填写 `.env` 中的站点地址和必要配置，并保持源码工作区干净；安装器会在构建前后检查源码，避免把本地改动标记为已发布提交。Git 同步不会复制 GitHub Releases 附件或 GHCR 镜像；节点接入需先按 [Agent 发布说明](./agent/README.md) 发布本仓库的 Agent。
 
 默认仅监听 `127.0.0.1:3000`，生产环境应通过受信任反向代理提供 HTTPS。启动前至少确认 `POSTGRES_PASSWORD`、`JWT_SECRET`、`ENCRYPTION_KEY`、`ADMIN_PASSWORD`、`FRONTEND_URL` 和 `SITE_URL` 已正确配置。不要提交生产环境 `.env`。
 
@@ -111,14 +113,22 @@ pnpm dev
 
 ## 升级现有部署
 
-通过上述 Docker Compose 源码方式部署的面板，在仓库目录中更新：
+源码 Docker Compose 部署首次启用网页更新时，在仓库目录执行以下命令。升级前自行备份 PostgreSQL 和 `.env`；保持源码工作区干净，先处理本地代码改动。
 
 ```bash
 git pull --ff-only origin main
-docker compose up -d --build
+sudo bash scripts/install-source.sh
 ```
 
-直接使用 Node.js 运行的部署：
+随后在「管理 → 系统更新」手动检查本仓库 **main**，查看当前运行提交、目标提交和 CI 状态。确认后，执行器下载已选定的完整提交并构建镜像；构建成功后暂停面板写入、备份数据库、启动新版本并验证实际运行提交。CI 未通过或 main 在确认前发生变化时不能开始更新。
+
+更新执行器作为独立 systemd 服务运行，状态保存在 `/var/lib/incudal-updater/status.json`，页面在面板重启后继续显示进度。执行器仅向应用提供受限 Unix socket，配置在 `/etc/incudal-updater/`；不需要把 Docker socket 挂载给应用。每次成功更新也会更新执行器本身。
+
+更新后的 Git 工作区停在所选提交（detached HEAD），日常继续使用网页更新。若必须手工更新，先确认 `git status --short` 干净，再 `git fetch origin main`、`git checkout --detach origin/main`，运行 `sudo bash scripts/install-source.sh`。不要在该状态下直接套用 `git pull`。本地 `docker-compose.override.yml` 和 `.env` 保留；自定义 Compose 文件应放在项目内，并在首次安装执行器前配置 `COMPOSE_FILE`。
+
+备份为 `/var/lib/incudal-updater/database-<任务ID>.dump`。新版本启动失败时执行器尝试恢复之前的镜像和源码提交，但**不会自动恢复数据库**；迁移可能已执行。恢复失败时查看状态文件与 `journalctl -u incudal-updater -u 'incudal-update@*'`，由管理员判断是否恢复数据库备份。保留备份期间应定期检查磁盘空间。
+
+直接使用 Node.js 运行的部署仍通过终端更新，当前网页执行器适用于源码 Docker Compose 部署：
 
 ```bash
 pnpm install
@@ -144,7 +154,24 @@ sudo bash scripts/remote-update.sh \
 
 脚本会自动识别 Docker Compose 与 systemd 产物包部署，并在升级前保留现有 `.env`、证书和数据库数据。
 
-管理员也可以登录站点，在「管理 → 系统更新」中手动检查版本、选择更新来源和部署模式，再点击「立即更新」。更新需要明确确认，不会在后台静默执行；如果当前部署没有站点更新执行器，页面会提供可复制的 root 命令。
+这些产物包脚本不参与网页 main 更新。Agent 仍通过独立的 `agent-v*` Release 发布和节点页面更新；面板不会再把 Agent Release 当成面板版本。私有仓库可在 `.env` 设置 `INCUDAL_UPDATE_GITHUB_TOKEN`（Contents / Actions 读取权限），与 Agent 的下载令牌分开。
+
+## 主机池与接入
+
+管理员按「机型分组 → 地区 → 宿主机」查看库存和实际客户归属。初始 E2、ARM 分组各含凤凰城、圣何塞、伦敦、首尔，机型与地区都可新增、改名、删除；空分组会保留，删除分组只清除归属。已结束的接入任务支持删除记录，宿主机和实例保留；排队或执行中的任务不能直接删除。
+
+新增宿主机填写公网 IP/域名和 SSH 凭据，选择地区以及可选规格：
+
+| 规格 | CPU 配额 | 客户内存 |
+| --- | --- | --- |
+| E2 | 200%（2 个逻辑 CPU 配额） | 768 MiB |
+| ARM1C / ARM2C / ARM3C / ARM4C | 100% / 200% / 300% / 400% | 4 / 8 / 12 / 16 GiB |
+
+所有规格都可选择 30、60、90、120 GiB 客户磁盘或自定义容量。自动模式实测架构、CPU、物理内存和可用磁盘；内存预留 `max(192 MiB, 物理内存的 20%)` 后向下取整到 64 MiB。预设与实测不匹配、物理资源不足时接入会明确失败，不会悄悄调小客户额度。
+
+客户磁盘与底层存储池分开：池额外预留 `max(4 GiB, 客户磁盘的 10% 向上取整)`，宿主文件系统另外保留 4 GiB，以及需要新建时的 1 GiB swap。接入会复用足够大的磁盘 swap，或创建持久化 1 GiB swap；不把 zram/swap 当成物理或客户内存。
+
+通过接入流程加入的机器实行一台宿主机一个客户实例，分配和数据库约束都防止重复占用；正在清理或结算删除账单的实例仍占库存。旧宿主机迁移保留原配额，不猜测历史客户磁盘额度。套餐、商品与购买页绑定机型/地区另行实现。
 
 ## 项目结构
 

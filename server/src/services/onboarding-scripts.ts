@@ -1,4 +1,4 @@
-import { shellQuote as q, type OnboardingDefaults } from '../lib/host-onboarding.js'
+import { shellQuote as q } from '../lib/host-onboarding.js'
 import type { OnboardingGateway } from './onboarding-ssh.js'
 
 export function preflightScript(id: string): string {
@@ -29,9 +29,9 @@ export function prepareKeyScript(id: string): string {
 umask 077
 . /etc/os-release
 case "$ID" in
- alpine) apk add --no-cache bash curl ca-certificates python3 iproute2 wireguard-tools >/dev/null ;;
- debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update -qq; apt-get install -y bash curl ca-certificates python3 iproute2 wireguard-tools >/dev/null ;;
- rocky) dnf install -y bash curl ca-certificates python3 wireguard-tools >/dev/null ;;
+ alpine) apk add --no-cache bash curl ca-certificates python3 iproute2 wireguard-tools util-linux btrfs-progs >/dev/null ;;
+ debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update -qq; apt-get install -y bash curl ca-certificates python3 iproute2 wireguard-tools util-linux btrfs-progs >/dev/null ;;
+ rocky) dnf install -y bash curl ca-certificates python3 wireguard-tools util-linux btrfs-progs >/dev/null ;;
 esac
 key=${q('/root/.incudal-onboarding/' + id + '/wg.key')}
 [ -s "$key" ] || wg genkey > "$key"
@@ -70,7 +70,7 @@ echo INCUDAL_TUNNEL_STARTED
 `
 }
 
-export function installerStartScript(id: string, attempt: number, url: string, defaults: OnboardingDefaults): string {
+export function installerStartScript(id: string, attempt: number, url: string, defaults: { storageSize: number }): string {
   const directory = '/root/.incudal-onboarding/' + id
   const runner = `#!/bin/sh
 cd ${q(directory)} || exit 1

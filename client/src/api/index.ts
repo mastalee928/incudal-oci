@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import type { HostPortProtocolState, PortProtocol, PortProtocolState } from '@/types/api'
-import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest, HostMachineGroup, HostRegionGroup } from '@/types/api'
+import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest, HostMachineGroup, HostRegionGroup, HostPoolPrice, HostPoolPriceInput, HostPoolInventoryRow } from '@/types/api'
 
 // Keep bearer tokens in memory only. Session restoration uses the HttpOnly
 // refresh-token cookie, so XSS cannot recover a persisted access token.
@@ -1347,6 +1347,16 @@ const api = {
     retry: (id: string, credentials: OnboardingCredentials): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/retry`, credentials),
     cancel: (id: string): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/cancel`),
     deleteTask: (id: string): Promise<{ success: boolean }> => http.delete(`/host-onboarding/nodes/${id}`)
+  },
+  hostPools: {
+    // 池子定价表。resourcePreset 用 string 而不是 ResourcePreset：服务端有 enum 校验，
+    // 这里不引入额外的类型导入依赖。
+    prices: (params: { machineGroupId?: number; resourcePreset?: string } = {}): Promise<{ prices: HostPoolPrice[] }> =>
+      http.get('/host-pools/prices', { params }),
+    savePrices: (items: HostPoolPriceInput[]): Promise<{ saved: number; ids: number[] }> =>
+      http.post('/host-pools/prices/batch', { items }),
+    deletePrice: (id: number): Promise<{ success: boolean }> => http.delete(`/host-pools/prices/${id}`),
+    inventory: (): Promise<{ pools: HostPoolInventoryRow[] }> => http.get('/host-pools/inventory')
   },
   hosts: {
     getPortProtocol: (id: number): Promise<HostPortProtocolState> => http.get(`/hosts/${id}/port-protocol`),

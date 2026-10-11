@@ -152,6 +152,7 @@ interface EventData {
   newPrice?: number            // 新价格（续费价格修改）
   isIncrease?: boolean         // 是否为升级（价格升降级）
   daysRemaining?: number      // 剩余天数
+  hoursRemaining?: number     // 剩余小时数（到期提醒按 48/24/12 小时发送时使用）
   days?: number               // 延期天数
   amount?: number             // 金额（通用）
   reason?: string             // 原因（通用）
@@ -686,7 +687,9 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
     title: '⚠️ 实例即将到期',
     message: (data) => {
       let msg = `实例「${data.instanceName}」即将到期`
-      if (data.daysRemaining !== undefined) {
+      if (data.hoursRemaining !== undefined) {
+        msg += `\n剩余时间: ${data.hoursRemaining} 小时`
+      } else if (data.daysRemaining !== undefined) {
         msg += `\n剩余时间: ${data.daysRemaining} 天`
       }
       if (data.newExpiresAt) {

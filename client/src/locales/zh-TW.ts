@@ -211,6 +211,37 @@ export default {
             "ONBOARDING_STEP_FAILED": "目前階段失敗，請檢查宿主機後重試。"
         }
     },
+    hostPools: {
+        title: '池子定價',
+        description: '一機一賣的商品與價格。池子 = 機型 + 核心 + 地區 + 磁碟檔；一個池子就是一個商品，唯一變數是價格。',
+        core: '機型 / 核心',
+        priceView: '價格檢視',
+        monthlyPrice: '月費',
+        setupFee: '初裝費',
+        region: '地區',
+        emptyHint: '留空 = 該地區該檔位不賣；初裝費填 0 = 不收。價格單位是元。',
+        notSold: '不賣',
+        freeSetup: '0 = 不收',
+        stock: '空閒 {idle} / 共 {total}',
+        noStock: '暫無機器',
+        noMachineGroup: '還沒有對應的機型分組，請先在「主機接入與管理」裡建立。',
+        noMachines: '該機型下還沒有接入機器。先在「主機接入與管理」接入，並給機器指定這個機型的磁碟檔。',
+        save: '儲存定價',
+        saving: '儲存中...',
+        saved: '定價已儲存',
+        saveFailed: '儲存失敗，請重試。',
+        invalidPrice: '價格只能是數字，且不超過 99999999。',
+        nothingChanged: '沒有變更',
+        loadFailed: '定價載入失敗，請重新整理。',
+        continent: {
+            'asia-pacific': '亞太地區',
+            'north-america': '北美地區',
+            'europe': '歐洲',
+            'middle-east-africa': '中東和非洲地區',
+            'south-america': '南美地區',
+            'other': '其他'
+        }
+    },
     hostInventory: {
         "manageGroups": "管理分組",
         "addMachine": "新增機型分組",

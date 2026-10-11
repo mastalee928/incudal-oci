@@ -2842,32 +2842,32 @@ function formatHourlyDate(value: string | null | undefined): string {
           </div>
         </div>
         <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        <button
-          v-if="instance.isInstanceOwner || authStore.isAdmin"
-          class="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto text-center bg-blue-600 hover:bg-blue-700 text-white"
-          :disabled="errorRetryLoading || errorDestroyLoading"
-          @click="handleErrorRetry"
-        >
-          <span v-if="errorRetryLoading">{{ $t('common.processing') }}</span>
-          <span v-else>{{ $t('instance.errorBanner.retryNow') }}</span>
-        </button>
-        <button
-          class="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto text-center"
-          :class="themeStore.isDark 
-            ? 'bg-red-600 hover:bg-red-700 text-white' 
-            : 'bg-red-600 hover:bg-red-700 text-white'"
-          :disabled="errorDestroyLoading || errorRetryLoading"
-          @click="handleErrorDestroy"
-        >
-          <span v-if="errorDestroyLoading" class="inline-flex items-center gap-2">
-            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            {{ $t('common.processing') }}
-          </span>
-          <span v-else>{{ $t('instance.errorBanner.destroyNow') }}</span>
-        </button>
+          <button
+            v-if="instance.isInstanceOwner || authStore.isAdmin"
+            class="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto text-center bg-blue-600 hover:bg-blue-700 text-white"
+            :disabled="errorRetryLoading || errorDestroyLoading"
+            @click="handleErrorRetry"
+          >
+            <span v-if="errorRetryLoading">{{ $t('common.processing') }}</span>
+            <span v-else>{{ $t('instance.errorBanner.retryNow') }}</span>
+          </button>
+          <button
+            class="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto text-center"
+            :class="themeStore.isDark 
+              ? 'bg-red-600 hover:bg-red-700 text-white' 
+              : 'bg-red-600 hover:bg-red-700 text-white'"
+            :disabled="errorDestroyLoading || errorRetryLoading"
+            @click="handleErrorDestroy"
+          >
+            <span v-if="errorDestroyLoading" class="inline-flex items-center gap-2">
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              {{ $t('common.processing') }}
+            </span>
+            <span v-else>{{ $t('instance.errorBanner.destroyNow') }}</span>
+          </button>
         </div>
       </div>
 
@@ -3324,8 +3324,8 @@ function formatHourlyDate(value: string | null | undefined): string {
 
     <!-- Modals -->
     <AddPortModal
-      :udp-allowed="instance?.portProtocol?.requested !== 'tcp' && instance?.portProtocol?.applied !== 'tcp'"
       v-model:visible="showAddPortModal"
+      :udp-allowed="instance?.portProtocol?.requested !== 'tcp' && instance?.portProtocol?.applied !== 'tcp'"
       :loading="portLoading"
       :error="portError"
       :port-range-start="(instance as any)?.port_range_start"

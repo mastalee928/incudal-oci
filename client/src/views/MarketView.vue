@@ -710,458 +710,457 @@ onUnmounted(() => {
 
 <template>
   <PublicSiteLayout>
-  <div class="relative w-full">
-    <section class="relative px-4 pb-10 pt-14 sm:px-6 lg:px-8">
-      <div class="relative mx-auto max-w-7xl">
-        <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div class="max-w-3xl">
-            <div
-              class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium"
-              :class="ui.badge"
-            >
-              <span class="h-1.5 w-1.5 rounded-lg" :class="ui.badgeDot"></span>
-              {{ t('publicSite.market.badge') }}
+    <div class="relative w-full">
+      <section class="relative px-4 pb-10 pt-14 sm:px-6 lg:px-8">
+        <div class="relative mx-auto max-w-7xl">
+          <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+            <div class="max-w-3xl">
+              <div
+                class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium"
+                :class="ui.badge"
+              >
+                <span class="h-1.5 w-1.5 rounded-lg" :class="ui.badgeDot"></span>
+                {{ t('publicSite.market.badge') }}
+              </div>
+
+              <h1 class="mt-6 text-4xl font-normal tracking-[-0.02em] sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]" :class="ui.title">
+                {{ t('publicSite.market.title') }}
+              </h1>
+              <p class="mt-5 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8" :class="ui.body">
+                {{ t('publicSite.market.description') }}
+              </p>
             </div>
 
-            <h1 class="mt-6 text-4xl font-normal tracking-[-0.02em] sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]" :class="ui.title">
-              {{ t('publicSite.market.title') }}
-            </h1>
-            <p class="mt-5 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8" :class="ui.body">
-              {{ t('publicSite.market.description') }}
-            </p>
-
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div
-              v-for="card in summaryCards"
-              :key="card.label"
-              class="rounded-lg p-4 sm:p-5"
-              :class="ui.summaryCard"
-            >
-              <div class="text-xs font-medium" :class="ui.summaryLabel">
-                {{ card.label }}
-              </div>
-              <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.summaryValue">
-                {{ card.value }}
+            <div class="grid grid-cols-2 gap-3">
+              <div
+                v-for="card in summaryCards"
+                :key="card.label"
+                class="rounded-lg p-4 sm:p-5"
+                :class="ui.summaryCard"
+              >
+                <div class="text-xs font-medium" :class="ui.summaryLabel">
+                  {{ card.label }}
+                </div>
+                <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.summaryValue">
+                  {{ card.value }}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="relative px-4 pb-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-7xl">
-        <div
-          class="rounded-3xl p-5 sm:p-6"
-          :class="ui.filterWrap"
-        >
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div
-              class="inline-flex overflow-hidden rounded-lg p-1 self-start"
-              :class="themeStore.isDark ? 'bg-[#111827]' : 'bg-[#f3f4f6]'"
-            >
-              <button
-                class="h-9 rounded-lg px-5 text-sm font-medium tracking-[0.01em] transition-colors duration-150"
-                :class="packageSource === 'official' ? ui.chipActive : 'text-[#1f2937] hover:bg-black/5 dark:text-[#9ca3af] dark:hover:bg-white/5'"
-                @click="switchSource('official')"
+      <section class="relative px-4 pb-20 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-7xl">
+          <div
+            class="rounded-3xl p-5 sm:p-6"
+            :class="ui.filterWrap"
+          >
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div
+                class="inline-flex overflow-hidden rounded-lg p-1 self-start"
+                :class="themeStore.isDark ? 'bg-[#111827]' : 'bg-[#f3f4f6]'"
               >
-                {{ t('publicSite.market.official') }}
-              </button>
-              <button
-                class="h-9 rounded-lg px-5 text-sm font-medium tracking-[0.01em] transition-colors duration-150"
-                :class="packageSource === 'market' ? ui.chipActive : 'text-[#1f2937] hover:bg-black/5 dark:text-[#9ca3af] dark:hover:bg-white/5'"
-                @click="switchSource('market')"
-              >
-                {{ t('publicSite.market.market') }}
-              </button>
-            </div>
+                <button
+                  class="h-9 rounded-lg px-5 text-sm font-medium tracking-[0.01em] transition-colors duration-150"
+                  :class="packageSource === 'official' ? ui.chipActive : 'text-[#1f2937] hover:bg-black/5 dark:text-[#9ca3af] dark:hover:bg-white/5'"
+                  @click="switchSource('official')"
+                >
+                  {{ t('publicSite.market.official') }}
+                </button>
+                <button
+                  class="h-9 rounded-lg px-5 text-sm font-medium tracking-[0.01em] transition-colors duration-150"
+                  :class="packageSource === 'market' ? ui.chipActive : 'text-[#1f2937] hover:bg-black/5 dark:text-[#9ca3af] dark:hover:bg-white/5'"
+                  @click="switchSource('market')"
+                >
+                  {{ t('publicSite.market.market') }}
+                </button>
+              </div>
 
-            <div class="relative w-full lg:max-w-sm">
-              <svg class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" :class="ui.searchClear" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z" />
-              </svg>
-              <input
-                v-model="searchQuery"
-                type="text"
-                class="h-12 w-full rounded-lg border pl-11 pr-12 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#111827]/30 dark:focus:ring-[#ffffff]/30"
-                :class="ui.searchInput"
-                :placeholder="t('publicSite.market.searchPlaceholder')"
-                @input="handleSearchInput"
-              />
-              <button
-                v-if="searchQuery"
-                class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 transition-colors duration-150"
-                :class="ui.searchClear"
-                @click="clearSearch"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <div class="relative w-full lg:max-w-sm">
+                <svg class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" :class="ui.searchClear" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z" />
                 </svg>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  class="h-12 w-full rounded-lg border pl-11 pr-12 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#111827]/30 dark:focus:ring-[#ffffff]/30"
+                  :class="ui.searchInput"
+                  :placeholder="t('publicSite.market.searchPlaceholder')"
+                  @input="handleSearchInput"
+                />
+                <button
+                  v-if="searchQuery"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 transition-colors duration-150"
+                  :class="ui.searchClear"
+                  @click="clearSearch"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="regions.length > 0" class="mt-5 flex flex-wrap gap-2">
+              <button
+                class="inline-flex h-8 items-center rounded-lg px-3 text-sm font-medium transition-colors duration-150"
+                :class="selectedRegion === null ? ui.chipActive : ui.chipIdle"
+                @click="selectRegion(null)"
+              >
+                <svg v-if="selectedRegion === null" class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                {{ t('publicSite.market.allRegions') }}
+              </button>
+
+              <button
+                v-for="region in regions"
+                :key="region.code"
+                class="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150"
+                :class="selectedRegion === region.code ? ui.chipActive : ui.chipIdle"
+                @click="selectRegion(region.code)"
+              >
+                <svg v-if="selectedRegion === region.code" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <FlagIcon :code="region.code" class="w-4 h-3" />
+                <span>{{ getRegionLabel(region.code) }}</span>
               </button>
             </div>
           </div>
 
-          <div v-if="regions.length > 0" class="mt-5 flex flex-wrap gap-2">
-            <button
-              class="inline-flex h-8 items-center rounded-lg px-3 text-sm font-medium transition-colors duration-150"
-              :class="selectedRegion === null ? ui.chipActive : ui.chipIdle"
-              @click="selectRegion(null)"
-            >
-              <svg v-if="selectedRegion === null" class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-              </svg>
-              {{ t('publicSite.market.allRegions') }}
-            </button>
-
-            <button
-              v-for="region in regions"
-              :key="region.code"
-              class="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150"
-              :class="selectedRegion === region.code ? ui.chipActive : ui.chipIdle"
-              @click="selectRegion(region.code)"
-            >
-              <svg v-if="selectedRegion === region.code" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-              </svg>
-              <FlagIcon :code="region.code" class="w-4 h-3" />
-              <span>{{ getRegionLabel(region.code) }}</span>
-            </button>
+          <div v-if="loadError" class="mt-6 flex items-start gap-3 rounded-lg px-4 py-4 text-sm leading-6" :class="ui.errorBanner">
+            <svg class="mt-0.5 h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 19h14.14a2 2 0 001.73-3l-7.07-12a2 2 0 00-3.46 0L3.2 16a2 2 0 001.73 3z" />
+            </svg>
+            <span>{{ loadError }}</span>
           </div>
-        </div>
 
-        <div v-if="loadError" class="mt-6 flex items-start gap-3 rounded-lg px-4 py-4 text-sm leading-6" :class="ui.errorBanner">
-          <svg class="mt-0.5 h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 19h14.14a2 2 0 001.73-3l-7.07-12a2 2 0 00-3.46 0L3.2 16a2 2 0 001.73 3z" />
-          </svg>
-          <span>{{ loadError }}</span>
-        </div>
-
-        <div v-else-if="loading" class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-          <div class="grid gap-4 md:grid-cols-2">
+          <div v-else-if="loading" class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+            <div class="grid gap-4 md:grid-cols-2">
+              <div
+                v-for="index in 6"
+                :key="index"
+                class="h-52 animate-pulse rounded-lg"
+                :class="ui.skeleton"
+              ></div>
+            </div>
             <div
-              v-for="index in 6"
-              :key="index"
-              class="h-52 animate-pulse rounded-lg"
+              class="h-[32rem] animate-pulse rounded-3xl"
               :class="ui.skeleton"
             ></div>
           </div>
-          <div
-            class="h-[32rem] animate-pulse rounded-3xl"
-            :class="ui.skeleton"
-          ></div>
-        </div>
-
-        <div
-          v-else-if="packages.length === 0"
-          class="mt-6 rounded-3xl border border-dashed px-6 py-16 text-center"
-          :class="ui.emptyState"
-        >
-          {{ t('publicSite.market.noPackages') }}
-        </div>
-
-        <div v-else class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-          <div class="min-w-0 lg:pr-2">
-            <div v-if="filteredPackages.length === 0" class="rounded-3xl border border-dashed px-6 py-16 text-center" :class="ui.emptyState">
-              <div class="text-base font-medium" :class="ui.emptyStateTitle">
-                {{ t('publicSite.market.noResults') }}
-              </div>
-              <button
-                v-if="searchQuery || selectedRegion"
-                class="mt-4 inline-flex h-10 items-center rounded-lg px-6 text-sm font-medium transition-colors duration-150"
-                :class="ui.emptyStateButton"
-                @click="searchQuery = ''; selectRegion(null)"
-              >
-                {{ t('common.reset') }}
-              </button>
-            </div>
-
-            <div v-else class="grid gap-4 md:grid-cols-2">
-              <button
-                v-for="pkg in filteredPackages"
-                :key="pkg.id"
-                class="rounded-3xl p-5 text-left transition-[background-color,box-shadow] duration-150"
-                :class="[
-                  selectedPackage?.id === pkg.id ? ui.packageCardSelected : ui.packageCard,
-                  pkg.soldOut ? 'opacity-70' : ''
-                ]"
-                @click="selectPackage(pkg)"
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span
-                        class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                        :class="pkg.instance_type === 'vm' ? ui.chipKvm : ui.chipLxc"
-                      >
-                        {{ pkg.instance_type === 'vm' ? 'KVM' : 'LXC' }}
-                      </span>
-                      <span
-                        class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                        :class="pkg.soldOut ? ui.chipSoldOut : ui.chipInStock"
-                      >
-                        {{ pkg.soldOut ? t('publicSite.market.soldOut') : t('publicSite.market.inStock') }}
-                      </span>
-                    </div>
-
-                    <div class="mt-4 truncate text-lg font-medium tracking-[-0.01em]">
-                      {{ pkg.name }}
-                    </div>
-                    <p class="package-card-description mt-2 text-sm leading-5" :class="selectedPackage?.id === pkg.id ? '' : ui.packageCardMuted">
-                      {{ pkg.description || t('publicSite.portal.packageFallback') }}
-                    </p>
-                  </div>
-
-                  <div class="shrink-0 text-right">
-                    <div class="text-sm font-medium">
-                      {{ getPackagePriceLabel(pkg) }}
-                    </div>
-                    <div class="mt-1 text-xs" :class="selectedPackage?.id === pkg.id ? '' : ui.packageCardMuted">
-                      {{ formatPackageTraffic(pkg) }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="mt-5 grid grid-cols-2 gap-6 border-t pt-4" :class="selectedPackage?.id === pkg.id ? 'border-[#111827]/20 dark:border-[#ffffff]/20' : ui.statDivider">
-                  <div>
-                    <div class="text-[11px] font-medium" :class="selectedPackage?.id === pkg.id ? 'opacity-70' : ui.statBlockLabel">{{ t('publicSite.market.labels.plans') }}</div>
-                    <div class="mt-1 text-sm font-medium">{{ getPlanLabel(pkg) }}</div>
-                  </div>
-                  <div>
-                    <div class="text-[11px] font-medium" :class="selectedPackage?.id === pkg.id ? 'opacity-70' : ui.statBlockLabel">{{ t('publicSite.market.labels.network') }}</div>
-                    <div class="mt-1 text-sm font-medium leading-5">{{ getNetworkLabel(pkg) }}</div>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
 
           <div
-            ref="detailColumnRef"
-            class="min-w-0 lg:self-start"
-            :style="detailColumnStyle"
+            v-else-if="packages.length === 0"
+            class="mt-6 rounded-3xl border border-dashed px-6 py-16 text-center"
+            :class="ui.emptyState"
           >
-            <div
-              ref="detailCardRef"
-              class="rounded-3xl border p-6"
-              :class="ui.detailCard"
-              :style="detailCardStyle"
-            >
-              <template v-if="selectedPackage">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                    :class="selectedPackage.sourceType === 'official' ? ui.chipOfficial : ui.chipMarket"
-                  >
-                    {{ selectedPackage.sourceType === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
-                  </span>
-                  <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                    :class="selectedPackage.instance_type === 'vm' ? ui.chipKvm : ui.chipLxc"
-                  >
-                    {{ selectedPackage.instance_type === 'vm' ? 'KVM' : 'LXC' }}
-                  </span>
+            {{ t('publicSite.market.noPackages') }}
+          </div>
+
+          <div v-else class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+            <div class="min-w-0 lg:pr-2">
+              <div v-if="filteredPackages.length === 0" class="rounded-3xl border border-dashed px-6 py-16 text-center" :class="ui.emptyState">
+                <div class="text-base font-medium" :class="ui.emptyStateTitle">
+                  {{ t('publicSite.market.noResults') }}
                 </div>
-
-                <h2 class="mt-4 text-2xl font-normal tracking-[-0.02em]" :class="ui.title">
-                  {{ selectedPackage.name }}
-                </h2>
-                <p class="mt-3 text-sm leading-6" :class="ui.body">
-                  {{ selectedPackage.description || t('publicSite.portal.packageFallback') }}
-                </p>
-
-                <div class="mt-6 grid grid-cols-2 gap-3">
-                  <div class="rounded-lg p-4" :class="ui.detailSummaryCard">
-                    <div class="flex items-center gap-2">
-                      <svg class="h-4 w-4" :class="ui.detailSummaryIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div class="text-xs font-medium" :class="ui.detailSummaryLabel">
-                        {{ t('publicSite.market.labels.startingPrice') }}
-                      </div>
-                    </div>
-                    <div class="mt-2 text-lg font-medium">{{ getPackagePriceLabel(selectedPackage) }}</div>
-                  </div>
-                  <div class="rounded-lg p-4" :class="ui.detailSummaryCard">
-                    <div class="flex items-center gap-2">
-                      <svg class="h-4 w-4" :class="ui.detailSummaryIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <div class="text-xs font-medium" :class="ui.detailSummaryLabel">
-                        {{ t('publicSite.market.labels.traffic') }}
-                      </div>
-                    </div>
-                    <div class="mt-2 text-lg font-medium">{{ formatPackageTraffic(selectedPackage) }}</div>
-                  </div>
-                </div>
-
-                <div class="mt-6 space-y-3">
-                  <div class="text-sm font-medium" :class="ui.title">
-                    {{ t('publicSite.market.plansTitle') }}
-                  </div>
-                  <div v-if="selectedPackage.isPaid && selectedPackage.plans.length > 0" class="space-y-2 lg:max-h-72 lg:overflow-y-auto lg:pr-1">
-                    <button
-                      v-for="plan in selectedPackage.plans"
-                      :key="plan.id"
-                      class="w-full rounded-lg px-3 py-3 text-left transition-colors duration-150"
-                      :class="[
-                        selectedPlan?.id === plan.id ? ui.planSelected : ui.planIdle,
-                        plan.isSoldOut ? 'cursor-not-allowed opacity-60 hover:bg-inherit' : ''
-                      ]"
-                      :disabled="plan.isSoldOut"
-                      @click="selectPlan(plan.id)"
-                    >
-                      <div class="flex items-start gap-3">
-                        <div
-                          class="mt-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-lg border-2"
-                          :class="selectedPlan?.id === plan.id ? ui.radioActive : ui.radioIdle"
-                        >
-                          <div v-if="selectedPlan?.id === plan.id" class="h-1.5 w-1.5 rounded-lg" :class="themeStore.isDark ? 'bg-[#111827]' : 'bg-white'"></div>
-                        </div>
-                        <div class="min-w-0 flex-1">
-                          <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                              <div class="truncate text-sm font-medium">
-                                {{ plan.name }}
-                              </div>
-                              <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] opacity-70">
-                                <span>{{ getMarketPlanBillingLabel(plan) }}</span>
-                                <span
-                                  v-if="plan.isSoldOut"
-                                  class="rounded-lg border px-1.5 py-0.5 opacity-100"
-                                  :class="ui.chipSoldOut"
-                                >
-                                  {{ t('publicSite.market.soldOut') }}
-                                </span>
-                              </div>
-                            </div>
-                            <div class="shrink-0 text-right">
-                              <template v-if="plan.billingMode === 'hourly'">
-                                <div class="text-sm font-medium">{{ t('resources.plans.hourlyBilling') }}</div>
-                                <div class="mt-0.5 text-[11px] opacity-70">{{ t('resources.plans.hourlyBillingPriceHint') }}</div>
-                              </template>
-                              <template v-else>
-                                <div class="text-sm font-medium">
-                                  {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(plan.price)}` }}
-                                </div>
-                                <div class="mt-0.5 text-[11px] opacity-70">
-                                  {{ getMarketMonthlyPriceLabel(plan.monthlyPrice) }}
-                                </div>
-                              </template>
-                            </div>
-                          </div>
-
-                          <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                            <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
-                              CPU {{ plan.cpu }}%
-                            </span>
-                            <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
-                              {{ formatMemory(plan.memory) }}
-                            </span>
-                            <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
-                              {{ formatDisk(plan.disk) }}
-                            </span>
-                            <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
-                              {{ formatTraffic(plan.trafficLimit) }}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                  <div
-                    v-else
-                    class="rounded-lg p-4 text-sm leading-6"
-                    :class="ui.infoCard"
-                  >
-                    <div class="font-medium" :class="ui.title">
-                      {{ t('publicSite.market.customConfigTitle') }}
-                    </div>
-                    <p class="mt-2">
-                      {{ t('publicSite.market.customConfigDescription') }}
-                    </p>
-                  </div>
-                </div>
-
-                <div v-if="selectedPlan" class="mt-5">
-                  <div class="rounded-lg px-4 py-4" :class="ui.detailSummaryCard">
-                    <div class="flex items-start justify-between gap-4">
-                      <div class="min-w-0">
-                        <div class="text-xs font-medium" :class="ui.statBlockLabel">
-                          {{ t('publicSite.market.selectedPlanTitle') }}
-                        </div>
-                        <div class="mt-1 truncate text-base font-medium" :class="ui.title">
-                          {{ selectedPlan.name }}
-                        </div>
-                        <div class="mt-1 text-xs" :class="ui.statBlockLabel">
-                          {{ getMarketPlanBillingLabel(selectedPlan) }} · {{ getNetworkLabel(selectedPackage) }}
-                        </div>
-                      </div>
-                      <div class="shrink-0 text-right">
-                        <template v-if="selectedPlan.billingMode === 'hourly'">
-                          <div class="text-base font-medium" :class="ui.title">{{ t('resources.plans.hourlyBilling') }}</div>
-                          <div class="mt-0.5 text-[11px]" :class="ui.statBlockLabel">{{ t('resources.plans.hourlyBillingPriceHint') }}</div>
-                        </template>
-                        <template v-else>
-                          <div class="text-xl font-normal tracking-[-0.02em]" :class="ui.title">
-                            {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(selectedPlan.price)}` }}
-                          </div>
-                          <div class="mt-0.5 text-[11px]" :class="ui.statBlockLabel">
-                            {{ getMarketMonthlyPriceLabel(selectedPlan.monthlyPrice) }}
-                          </div>
-                        </template>
-                      </div>
-                    </div>
-
-                    <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-                      <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
-                        CPU {{ selectedPlan.cpu }}%
-                      </span>
-                      <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
-                        {{ formatMemory(selectedPlan.memory) }}
-                      </span>
-                      <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
-                        {{ formatDisk(selectedPlan.disk) }}
-                      </span>
-                      <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
-                        {{ formatTraffic(selectedPlan.trafficLimit) }}
-                      </span>
-                      <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
-                        {{ t('publicSite.market.labels.hosts') }} {{ selectedPackage.host_ids.length }}
-                      </span>
-                      <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
-                        {{ t('publicSite.market.labels.nesting') }} {{ selectedPackage.nested ? t('common.yes') : t('common.no') }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
                 <button
-                  class="mt-8 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60"
-                  :class="ui.ctaButton"
-                  :disabled="selectedPackage.soldOut || (selectedPackage.isPaid && !selectedPlan)"
-                  @click="createInstance(selectedPackage)"
+                  v-if="searchQuery || selectedRegion"
+                  class="mt-4 inline-flex h-10 items-center rounded-lg px-6 text-sm font-medium transition-colors duration-150"
+                  :class="ui.emptyStateButton"
+                  @click="searchQuery = ''; selectRegion(null)"
                 >
-                  {{ getMarketCtaText(selectedPackage) }}
+                  {{ t('common.reset') }}
                 </button>
+              </div>
 
-                <p v-if="!authStore.isAuthenticated" class="mt-3 text-center text-xs leading-5" :class="ui.statBlockLabel">
-                  {{ t('publicSite.market.loginHint') }}
-                </p>
-              </template>
+              <div v-else class="grid gap-4 md:grid-cols-2">
+                <button
+                  v-for="pkg in filteredPackages"
+                  :key="pkg.id"
+                  class="rounded-3xl p-5 text-left transition-[background-color,box-shadow] duration-150"
+                  :class="[
+                    selectedPackage?.id === pkg.id ? ui.packageCardSelected : ui.packageCard,
+                    pkg.soldOut ? 'opacity-70' : ''
+                  ]"
+                  @click="selectPackage(pkg)"
+                >
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span
+                          class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                          :class="pkg.instance_type === 'vm' ? ui.chipKvm : ui.chipLxc"
+                        >
+                          {{ pkg.instance_type === 'vm' ? 'KVM' : 'LXC' }}
+                        </span>
+                        <span
+                          class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                          :class="pkg.soldOut ? ui.chipSoldOut : ui.chipInStock"
+                        >
+                          {{ pkg.soldOut ? t('publicSite.market.soldOut') : t('publicSite.market.inStock') }}
+                        </span>
+                      </div>
 
-              <template v-else>
-                <div class="flex min-h-[20rem] items-center justify-center text-center text-sm" :class="ui.statBlockLabel">
-                  {{ t('publicSite.market.choosePackage') }}
-                </div>
-              </template>
+                      <div class="mt-4 truncate text-lg font-medium tracking-[-0.01em]">
+                        {{ pkg.name }}
+                      </div>
+                      <p class="package-card-description mt-2 text-sm leading-5" :class="selectedPackage?.id === pkg.id ? '' : ui.packageCardMuted">
+                        {{ pkg.description || t('publicSite.portal.packageFallback') }}
+                      </p>
+                    </div>
+
+                    <div class="shrink-0 text-right">
+                      <div class="text-sm font-medium">
+                        {{ getPackagePriceLabel(pkg) }}
+                      </div>
+                      <div class="mt-1 text-xs" :class="selectedPackage?.id === pkg.id ? '' : ui.packageCardMuted">
+                        {{ formatPackageTraffic(pkg) }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-5 grid grid-cols-2 gap-6 border-t pt-4" :class="selectedPackage?.id === pkg.id ? 'border-[#111827]/20 dark:border-[#ffffff]/20' : ui.statDivider">
+                    <div>
+                      <div class="text-[11px] font-medium" :class="selectedPackage?.id === pkg.id ? 'opacity-70' : ui.statBlockLabel">{{ t('publicSite.market.labels.plans') }}</div>
+                      <div class="mt-1 text-sm font-medium">{{ getPlanLabel(pkg) }}</div>
+                    </div>
+                    <div>
+                      <div class="text-[11px] font-medium" :class="selectedPackage?.id === pkg.id ? 'opacity-70' : ui.statBlockLabel">{{ t('publicSite.market.labels.network') }}</div>
+                      <div class="mt-1 text-sm font-medium leading-5">{{ getNetworkLabel(pkg) }}</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div
+              ref="detailColumnRef"
+              class="min-w-0 lg:self-start"
+              :style="detailColumnStyle"
+            >
+              <div
+                ref="detailCardRef"
+                class="rounded-3xl border p-6"
+                :class="ui.detailCard"
+                :style="detailCardStyle"
+              >
+                <template v-if="selectedPackage">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                      :class="selectedPackage.sourceType === 'official' ? ui.chipOfficial : ui.chipMarket"
+                    >
+                      {{ selectedPackage.sourceType === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
+                    </span>
+                    <span
+                      class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                      :class="selectedPackage.instance_type === 'vm' ? ui.chipKvm : ui.chipLxc"
+                    >
+                      {{ selectedPackage.instance_type === 'vm' ? 'KVM' : 'LXC' }}
+                    </span>
+                  </div>
+
+                  <h2 class="mt-4 text-2xl font-normal tracking-[-0.02em]" :class="ui.title">
+                    {{ selectedPackage.name }}
+                  </h2>
+                  <p class="mt-3 text-sm leading-6" :class="ui.body">
+                    {{ selectedPackage.description || t('publicSite.portal.packageFallback') }}
+                  </p>
+
+                  <div class="mt-6 grid grid-cols-2 gap-3">
+                    <div class="rounded-lg p-4" :class="ui.detailSummaryCard">
+                      <div class="flex items-center gap-2">
+                        <svg class="h-4 w-4" :class="ui.detailSummaryIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div class="text-xs font-medium" :class="ui.detailSummaryLabel">
+                          {{ t('publicSite.market.labels.startingPrice') }}
+                        </div>
+                      </div>
+                      <div class="mt-2 text-lg font-medium">{{ getPackagePriceLabel(selectedPackage) }}</div>
+                    </div>
+                    <div class="rounded-lg p-4" :class="ui.detailSummaryCard">
+                      <div class="flex items-center gap-2">
+                        <svg class="h-4 w-4" :class="ui.detailSummaryIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <div class="text-xs font-medium" :class="ui.detailSummaryLabel">
+                          {{ t('publicSite.market.labels.traffic') }}
+                        </div>
+                      </div>
+                      <div class="mt-2 text-lg font-medium">{{ formatPackageTraffic(selectedPackage) }}</div>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 space-y-3">
+                    <div class="text-sm font-medium" :class="ui.title">
+                      {{ t('publicSite.market.plansTitle') }}
+                    </div>
+                    <div v-if="selectedPackage.isPaid && selectedPackage.plans.length > 0" class="space-y-2 lg:max-h-72 lg:overflow-y-auto lg:pr-1">
+                      <button
+                        v-for="plan in selectedPackage.plans"
+                        :key="plan.id"
+                        class="w-full rounded-lg px-3 py-3 text-left transition-colors duration-150"
+                        :class="[
+                          selectedPlan?.id === plan.id ? ui.planSelected : ui.planIdle,
+                          plan.isSoldOut ? 'cursor-not-allowed opacity-60 hover:bg-inherit' : ''
+                        ]"
+                        :disabled="plan.isSoldOut"
+                        @click="selectPlan(plan.id)"
+                      >
+                        <div class="flex items-start gap-3">
+                          <div
+                            class="mt-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-lg border-2"
+                            :class="selectedPlan?.id === plan.id ? ui.radioActive : ui.radioIdle"
+                          >
+                            <div v-if="selectedPlan?.id === plan.id" class="h-1.5 w-1.5 rounded-lg" :class="themeStore.isDark ? 'bg-[#111827]' : 'bg-white'"></div>
+                          </div>
+                          <div class="min-w-0 flex-1">
+                            <div class="flex items-start justify-between gap-3">
+                              <div class="min-w-0">
+                                <div class="truncate text-sm font-medium">
+                                  {{ plan.name }}
+                                </div>
+                                <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] opacity-70">
+                                  <span>{{ getMarketPlanBillingLabel(plan) }}</span>
+                                  <span
+                                    v-if="plan.isSoldOut"
+                                    class="rounded-lg border px-1.5 py-0.5 opacity-100"
+                                    :class="ui.chipSoldOut"
+                                  >
+                                    {{ t('publicSite.market.soldOut') }}
+                                  </span>
+                                </div>
+                              </div>
+                              <div class="shrink-0 text-right">
+                                <template v-if="plan.billingMode === 'hourly'">
+                                  <div class="text-sm font-medium">{{ t('resources.plans.hourlyBilling') }}</div>
+                                  <div class="mt-0.5 text-[11px] opacity-70">{{ t('resources.plans.hourlyBillingPriceHint') }}</div>
+                                </template>
+                                <template v-else>
+                                  <div class="text-sm font-medium">
+                                    {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(plan.price)}` }}
+                                  </div>
+                                  <div class="mt-0.5 text-[11px] opacity-70">
+                                    {{ getMarketMonthlyPriceLabel(plan.monthlyPrice) }}
+                                  </div>
+                                </template>
+                              </div>
+                            </div>
+
+                            <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                              <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
+                                CPU {{ plan.cpu }}%
+                              </span>
+                              <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
+                                {{ formatMemory(plan.memory) }}
+                              </span>
+                              <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
+                                {{ formatDisk(plan.disk) }}
+                              </span>
+                              <span class="rounded-lg border px-2 py-0.5 font-medium" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">
+                                {{ formatTraffic(plan.trafficLimit) }}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                    <div
+                      v-else
+                      class="rounded-lg p-4 text-sm leading-6"
+                      :class="ui.infoCard"
+                    >
+                      <div class="font-medium" :class="ui.title">
+                        {{ t('publicSite.market.customConfigTitle') }}
+                      </div>
+                      <p class="mt-2">
+                        {{ t('publicSite.market.customConfigDescription') }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div v-if="selectedPlan" class="mt-5">
+                    <div class="rounded-lg px-4 py-4" :class="ui.detailSummaryCard">
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                          <div class="text-xs font-medium" :class="ui.statBlockLabel">
+                            {{ t('publicSite.market.selectedPlanTitle') }}
+                          </div>
+                          <div class="mt-1 truncate text-base font-medium" :class="ui.title">
+                            {{ selectedPlan.name }}
+                          </div>
+                          <div class="mt-1 text-xs" :class="ui.statBlockLabel">
+                            {{ getMarketPlanBillingLabel(selectedPlan) }} · {{ getNetworkLabel(selectedPackage) }}
+                          </div>
+                        </div>
+                        <div class="shrink-0 text-right">
+                          <template v-if="selectedPlan.billingMode === 'hourly'">
+                            <div class="text-base font-medium" :class="ui.title">{{ t('resources.plans.hourlyBilling') }}</div>
+                            <div class="mt-0.5 text-[11px]" :class="ui.statBlockLabel">{{ t('resources.plans.hourlyBillingPriceHint') }}</div>
+                          </template>
+                          <template v-else>
+                            <div class="text-xl font-normal tracking-[-0.02em]" :class="ui.title">
+                              {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(selectedPlan.price)}` }}
+                            </div>
+                            <div class="mt-0.5 text-[11px]" :class="ui.statBlockLabel">
+                              {{ getMarketMonthlyPriceLabel(selectedPlan.monthlyPrice) }}
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                        <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
+                          CPU {{ selectedPlan.cpu }}%
+                        </span>
+                        <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
+                          {{ formatMemory(selectedPlan.memory) }}
+                        </span>
+                        <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
+                          {{ formatDisk(selectedPlan.disk) }}
+                        </span>
+                        <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
+                          {{ formatTraffic(selectedPlan.trafficLimit) }}
+                        </span>
+                        <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
+                          {{ t('publicSite.market.labels.hosts') }} {{ selectedPackage.host_ids.length }}
+                        </span>
+                        <span class="rounded-lg border border-current px-2 py-0.5 font-medium opacity-90">
+                          {{ t('publicSite.market.labels.nesting') }} {{ selectedPackage.nested ? t('common.yes') : t('common.no') }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    class="mt-8 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60"
+                    :class="ui.ctaButton"
+                    :disabled="selectedPackage.soldOut || (selectedPackage.isPaid && !selectedPlan)"
+                    @click="createInstance(selectedPackage)"
+                  >
+                    {{ getMarketCtaText(selectedPackage) }}
+                  </button>
+
+                  <p v-if="!authStore.isAuthenticated" class="mt-3 text-center text-xs leading-5" :class="ui.statBlockLabel">
+                    {{ t('publicSite.market.loginHint') }}
+                  </p>
+                </template>
+
+                <template v-else>
+                  <div class="flex min-h-[20rem] items-center justify-center text-center text-sm" :class="ui.statBlockLabel">
+                    {{ t('publicSite.market.choosePackage') }}
+                  </div>
+                </template>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  </div>
+      </section>
+    </div>
   </PublicSiteLayout>
 </template>
 

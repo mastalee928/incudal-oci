@@ -791,6 +791,7 @@ model HostMachineGroup {
   regions   HostRegionGroup[]
   hosts     Host[]
   nodes     HostOnboardingNode[]
+  poolPrices HostPoolPrice[]
 
   @@map("host_machine_groups")
 }
@@ -804,9 +805,39 @@ model HostRegionGroup {
   machineGroup   HostMachineGroup @relation(fields: [machineGroupId], references: [id], onDelete: Cascade)
   hosts          Host[]
   nodes          HostOnboardingNode[]
+  poolPrices     HostPoolPrice[]
 
   @@unique([machineGroupId, name])
   @@map("host_region_groups")
+}
+
+// 池子价格：一机一卖下的商品与定价。
+// 池子 = 机型分组 + 核心数 + 地区 + 磁盘档；一行 = 一个可售商品。
+// 没有行 = 该池子不卖；active=false = 下架但保留价格。这张表就是管理端的定价表。
+model HostPoolPrice {
+  id             Int      @id @default(autoincrement())
+  machineGroupId Int      @map("machine_group_id")
+  resourcePreset String   @map("resource_preset") // E2 / ARM1C / ARM2C / ARM3C / ARM4C
+  regionGroupId  Int      @map("region_group_id")
+  diskGiB        Int      @map("disk_gib")
+  name           String? // 客户看到的商品名，留空则按机型/地区/磁盘档自动生成
+  // 单位是「分」，与 PackagePlan.price 一致；Instance.billingPrice 才是「元」。
+  monthlyPrice   Decimal  @map("monthly_price") @db.Decimal(10, 2)
+  setupFee       Decimal  @default(0) @map("setup_fee") @db.Decimal(10, 2) // 一次性初装费（分），0 = 不收
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  machineGroup HostMachineGroup @relation(fields: [machineGroupId], references: [id], onDelete: Cascade)
+  regionGroup  HostRegionGroup  @relation(fields: [regionGroupId], references: [id], onDelete: Cascade)
+  instances    Instance[]
+
+  // 显式短名：默认名超过 Postgres 的 63 字符上限会被截断，导致 Prisma 与实际库漂移
+  @@unique([machineGroupId, resourcePreset, regionGroupId, diskGiB], name: "host_pool_prices_pool_key")
+  @@index([regionGroupId])
+  @@index([active])
+  @@map("host_pool_prices")
 }
 
 model HostOnboardingBatch {
@@ -1062,6 +1093,7 @@ model Package {
   privileged          Boolean      @default(false)
   nested              Boolean      @default(false)
   active              Boolean      @default(true)
+  hidden              Boolean      @default(false) // 影子套餐：由池子定价自动生成，不在任何界面展示
   // 套餐资源限制
   portLimit           Int          @default(20) @map("port_limit") // 端口映射数上限
   snapshotLimit       Int          @default(5) @map("snapshot_limit") // 快照数上限
@@ -1120,6 +1152,7 @@ model Package {
   @@unique([userId, name]) // 同一用户下名称唯一
   @@index([userId])
   @@index([requiredPackageId])
+  @@index([hidden])
   @@map("packages")
 }
 
@@ -1133,6 +1166,7 @@ model Instance {
   hostId           Int            @map("host_id")
   packageId        Int?           @map("package_id")
   packagePlanId    Int?           @map("package_plan_id")  // 套餐方案 ID：按小时方案也保留关联，免费实例为 null
+  poolPriceId      Int?           @map("pool_price_id")    // 一机一卖商品（池子价格行）；旧模型实例为 null
   billingMode      InstanceBillingMode @default(package) @map("billing_mode")
   storagePoolName  String?        @map("storage_pool_name")
   image            String
@@ -1237,6 +1271,7 @@ model Instance {
   host            Host               @relation(fields: [hostId], references: [id])
   package         Package?           @relation(fields: [packageId], references: [id], onDelete: SetNull)
   packagePlan     PackagePlan?       @relation(fields: [packagePlanId], references: [id], onDelete: SetNull)
+  poolPrice       HostPoolPrice?     @relation(fields: [poolPriceId], references: [id], onDelete: SetNull)
   portMappings    PortMapping[]
   snapshots       Snapshot[]
   backups         Backup[]
@@ -1275,6 +1310,7 @@ model Instance {
   @@index([trafficBillingMode, status, nextTrafficBillingAt])
   @@index([billingMode, status])
   @@index([userId, displayOrder, createdAt(sort: Desc)])
+  @@index([poolPriceId])
   @@map("instances")
 }
 

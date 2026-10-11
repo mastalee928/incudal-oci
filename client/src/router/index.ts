@@ -287,6 +287,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'onboarding.title', title: '批量接入' }
   },
   {
+    path: '/admin/host-pools',
+    name: 'admin-host-pools',
+    component: () => import('@/views/admin/HostPoolPricingView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'hostPools.title', title: '池子定价' }
+  },
+  {
     path: '/admin/statistics',
     name: 'admin-statistics',
     component: () => import('@/views/admin/StatisticsView.vue'),

@@ -325,232 +325,232 @@ function formatDate(dateStr: string | null | undefined): string {
 
 <template>
   <PublicSiteLayout>
-  <div class="w-full px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-    <div class="mx-auto max-w-5xl space-y-6 animate-fade-in">
-    <!-- Header -->
-    <div class="page-header">
-      <div>
-        <!-- 详情视图加载中时显示返回按钮和骨架屏 -->
-        <template v-if="isDetailView && !articleLoaded">
-          <div class="mb-2">
-            <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="text-sm">{{ $t('help.backToHelp') }}</span>
-            </button>
-          </div>
-          <div class="h-7 w-48 bg-themed-tertiary rounded animate-pulse"></div>
-        </template>
-        <!-- 详情视图加载完成后显示文章标题 -->
-        <template v-else-if="isDetailView && currentArticle">
-          <div class="mb-2">
-            <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="text-sm">{{ $t('help.backToHelp') }}</span>
-            </button>
-          </div>
-          <h1 class="page-title">{{ currentArticle.title }}</h1>
-          <p v-if="currentArticle.updated_at" class="text-sm text-themed-muted">
-            {{ $t('help.updatedAt', { date: formatDate(currentArticle.updated_at) }) }}
-          </p>
-        </template>
-        <!-- 列表视图 -->
-        <template v-else-if="!isDetailView">
-          <h1 class="page-title">{{ $t('help.title') }}</h1>
-          <p class="page-description">{{ $t('help.description') }}</p>
-        </template>
-        <!-- 详情视图 404 情况 -->
-        <template v-else-if="isDetailView && articleLoaded && !currentArticle">
-          <div class="mb-2">
-            <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="text-sm">{{ $t('help.backToHelp') }}</span>
-            </button>
-          </div>
-          <h1 class="page-title">{{ $t('help.title') }}</h1>
-        </template>
-      </div>
-    </div>
-
-    <!-- Article List View -->
-    <template v-if="!isDetailView">
-      <!-- Built-in hosting tutorial -->
-      <div class="card border-cyan-500/30 bg-cyan-500/5 p-5 sm:p-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="w-full px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+      <div class="mx-auto max-w-5xl space-y-6 animate-fade-in">
+        <!-- Header -->
+        <div class="page-header">
           <div>
-            <div class="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
-              {{ $t('help.hostingTutorial.badge') }}
-            </div>
-            <h2 class="mt-2 text-lg font-semibold text-themed">
-              {{ $t('help.hostingTutorial.title') }}
-            </h2>
-            <p class="mt-2 max-w-3xl text-sm leading-6 text-themed-muted">
-              {{ $t('help.hostingTutorial.description') }}
-            </p>
+            <!-- 详情视图加载中时显示返回按钮和骨架屏 -->
+            <template v-if="isDetailView && !articleLoaded">
+              <div class="mb-2">
+                <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+                </button>
+              </div>
+              <div class="h-7 w-48 bg-themed-tertiary rounded animate-pulse"></div>
+            </template>
+            <!-- 详情视图加载完成后显示文章标题 -->
+            <template v-else-if="isDetailView && currentArticle">
+              <div class="mb-2">
+                <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+                </button>
+              </div>
+              <h1 class="page-title">{{ currentArticle.title }}</h1>
+              <p v-if="currentArticle.updated_at" class="text-sm text-themed-muted">
+                {{ $t('help.updatedAt', { date: formatDate(currentArticle.updated_at) }) }}
+              </p>
+            </template>
+            <!-- 列表视图 -->
+            <template v-else-if="!isDetailView">
+              <h1 class="page-title">{{ $t('help.title') }}</h1>
+              <p class="page-description">{{ $t('help.description') }}</p>
+            </template>
+            <!-- 详情视图 404 情况 -->
+            <template v-else-if="isDetailView && articleLoaded && !currentArticle">
+              <div class="mb-2">
+                <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+                </button>
+              </div>
+              <h1 class="page-title">{{ $t('help.title') }}</h1>
+            </template>
           </div>
-          <button class="btn-secondary shrink-0" @click="goToArticle(HOSTING_TUTORIAL_SLUG)">
-            {{ $t('help.hostingTutorial.read') }}
-          </button>
         </div>
-      </div>
 
-      <!-- Category overview -->
-      <section class="space-y-4">
-        <div>
-          <h2 class="text-lg font-semibold text-themed">{{ $t('help.categoryOverviewTitle') }}</h2>
-          <p class="mt-1 text-sm text-themed-muted">{{ $t('help.categoryOverviewDescription') }}</p>
-        </div>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <button
-            v-for="category in categoryCards"
-            :key="category.id"
-            class="card border-t-4 p-4 text-left transition-[border-color,background-color,box-shadow] hover:bg-themed-hover"
-            :class="selectedCategory === category.id ? 'ring-2 ring-accent/30' : ''"
-            :style="{ borderTopColor: category.color }"
-            @click="filterByCategory(category.id)"
-          >
-            <div class="flex items-start justify-between gap-3">
+        <!-- Article List View -->
+        <template v-if="!isDetailView">
+          <!-- Built-in hosting tutorial -->
+          <div class="card border-cyan-500/30 bg-cyan-500/5 p-5 sm:p-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 class="font-medium text-themed">{{ getCategoryLabel(category.id) }}</h3>
-                <p class="mt-1 text-xs text-themed-muted">
-                  {{ $t('help.categoryArticleCount', { count: category.count }) }}
+                <div class="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
+                  {{ $t('help.hostingTutorial.badge') }}
+                </div>
+                <h2 class="mt-2 text-lg font-semibold text-themed">
+                  {{ $t('help.hostingTutorial.title') }}
+                </h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-themed-muted">
+                  {{ $t('help.hostingTutorial.description') }}
                 </p>
               </div>
-              <svg class="h-5 w-5 shrink-0 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7" />
-              </svg>
+              <button class="btn-secondary shrink-0" @click="goToArticle(HOSTING_TUTORIAL_SLUG)">
+                {{ $t('help.hostingTutorial.read') }}
+              </button>
             </div>
-          </button>
-        </div>
-      </section>
+          </div>
 
-      <!-- Category Filter -->
-      <div v-if="categories.length > 0" class="flex flex-wrap gap-2">
-        <button
-          :class="[
-            'px-3 py-1.5 text-sm rounded-lg transition-colors',
-            !selectedCategory 
-              ? 'bg-accent text-white' 
-              : 'bg-themed-secondary text-themed-secondary hover:text-themed'
-          ]"
-          @click="filterByCategory('')"
-        >
-          {{ $t('help.all') }}
-        </button>
-        <button
-          v-for="cat in categories"
-          :key="cat.category"
-          :class="[
-            'px-3 py-1.5 text-sm rounded-lg transition-colors',
-            selectedCategory === cat.category 
-              ? 'bg-accent text-white' 
-              : 'bg-themed-secondary text-themed-secondary hover:text-themed'
-          ]"
-          @click="filterByCategory(cat.category)"
-        >
-          {{ getCategoryLabel(cat.category) }}
-          <span class="ml-1 opacity-60">({{ cat.count }})</span>
-        </button>
-      </div>
-
-      <div class="flex items-center justify-between gap-3">
-        <h2 class="text-lg font-semibold text-themed">
-          {{ selectedCategory ? getCategoryLabel(selectedCategory) : $t('help.allArticles') }}
-        </h2>
-        <button v-if="selectedCategory" class="btn-ghost btn-sm" @click="filterByCategory('')">
-          {{ $t('help.allArticles') }}
-        </button>
-      </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="card p-8 text-center text-themed-muted">
-        <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
-      
-      <!-- Empty -->
-      <div v-else-if="visibleArticles.length === 0" class="card p-8 text-center text-themed-muted">
-        {{ $t('help.noArticles') }}
-      </div>
-
-      <!-- Article List -->
-      <div v-else class="space-y-3">
-        <div 
-          v-for="article in visibleArticles"
-          :key="article.id"
-          class="card p-4 cursor-pointer hover:border-accent/50 transition-colors"
-          @click="goToArticle(article.slug)"
-        >
-          <div class="flex items-start justify-between">
+          <!-- Category overview -->
+          <section class="space-y-4">
             <div>
-              <h3 class="text-themed font-medium hover:text-accent transition-colors">{{ article.title }}</h3>
-              <p v-if="article.summary" class="mt-1 max-w-3xl text-sm leading-5 text-themed-muted">
-                {{ article.summary }}
-              </p>
-              <div class="flex items-center gap-3 mt-1 text-sm text-themed-muted">
-                <span 
-                  class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-themed-tertiary rounded text-xs"
-                >
-                  <span 
-                    class="w-2 h-2 rounded-full" 
-                    :style="{ backgroundColor: getCategoryColor(article.category) }"
-                  ></span>
-                  {{ getCategoryLabel(article.category) }}
-                </span>
-                <span>{{ formatDate(article.updated_at) }}</span>
-              </div>
+              <h2 class="text-lg font-semibold text-themed">{{ $t('help.categoryOverviewTitle') }}</h2>
+              <p class="mt-1 text-sm text-themed-muted">{{ $t('help.categoryOverviewDescription') }}</p>
             </div>
-            <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <button
+                v-for="category in categoryCards"
+                :key="category.id"
+                class="card border-t-4 p-4 text-left transition-[border-color,background-color,box-shadow] hover:bg-themed-hover"
+                :class="selectedCategory === category.id ? 'ring-2 ring-accent/30' : ''"
+                :style="{ borderTopColor: category.color }"
+                @click="filterByCategory(category.id)"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 class="font-medium text-themed">{{ getCategoryLabel(category.id) }}</h3>
+                    <p class="mt-1 text-xs text-themed-muted">
+                      {{ $t('help.categoryArticleCount', { count: category.count }) }}
+                    </p>
+                  </div>
+                  <svg class="h-5 w-5 shrink-0 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+            </div>
+          </section>
+
+          <!-- Category Filter -->
+          <div v-if="categories.length > 0" class="flex flex-wrap gap-2">
+            <button
+              :class="[
+                'px-3 py-1.5 text-sm rounded-lg transition-colors',
+                !selectedCategory 
+                  ? 'bg-accent text-white' 
+                  : 'bg-themed-secondary text-themed-secondary hover:text-themed'
+              ]"
+              @click="filterByCategory('')"
+            >
+              {{ $t('help.all') }}
+            </button>
+            <button
+              v-for="cat in categories"
+              :key="cat.category"
+              :class="[
+                'px-3 py-1.5 text-sm rounded-lg transition-colors',
+                selectedCategory === cat.category 
+                  ? 'bg-accent text-white' 
+                  : 'bg-themed-secondary text-themed-secondary hover:text-themed'
+              ]"
+              @click="filterByCategory(cat.category)"
+            >
+              {{ getCategoryLabel(cat.category) }}
+              <span class="ml-1 opacity-60">({{ cat.count }})</span>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-lg font-semibold text-themed">
+              {{ selectedCategory ? getCategoryLabel(selectedCategory) : $t('help.allArticles') }}
+            </h2>
+            <button v-if="selectedCategory" class="btn-ghost btn-sm" @click="filterByCategory('')">
+              {{ $t('help.allArticles') }}
+            </button>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="loading" class="card p-8 text-center text-themed-muted">
+            <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
           </div>
-        </div>
-      </div>
+      
+          <!-- Empty -->
+          <div v-else-if="visibleArticles.length === 0" class="card p-8 text-center text-themed-muted">
+            {{ $t('help.noArticles') }}
+          </div>
 
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="flex items-center justify-between text-sm text-themed-muted">
-        <span>{{ $t('help.totalArticles', { count: total }) }}</span>
-        <div class="flex items-center gap-2">
-          <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ $t('instance.prevPage') }}</button>
-          <span>{{ page }} / {{ totalPages }}</span>
-          <button :disabled="page >= totalPages" class="btn-ghost btn-sm" @click="page++; loadArticles()">{{ $t('instance.nextPage') }}</button>
-        </div>
-      </div>
-    </template>
+          <!-- Article List -->
+          <div v-else class="space-y-3">
+            <div 
+              v-for="article in visibleArticles"
+              :key="article.id"
+              class="card p-4 cursor-pointer hover:border-accent/50 transition-colors"
+              @click="goToArticle(article.slug)"
+            >
+              <div class="flex items-start justify-between">
+                <div>
+                  <h3 class="text-themed font-medium hover:text-accent transition-colors">{{ article.title }}</h3>
+                  <p v-if="article.summary" class="mt-1 max-w-3xl text-sm leading-5 text-themed-muted">
+                    {{ article.summary }}
+                  </p>
+                  <div class="flex items-center gap-3 mt-1 text-sm text-themed-muted">
+                    <span 
+                      class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-themed-tertiary rounded text-xs"
+                    >
+                      <span 
+                        class="w-2 h-2 rounded-full" 
+                        :style="{ backgroundColor: getCategoryColor(article.category) }"
+                      ></span>
+                      {{ getCategoryLabel(article.category) }}
+                    </span>
+                    <span>{{ formatDate(article.updated_at) }}</span>
+                  </div>
+                </div>
+                <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </div>
 
-    <!-- Article Detail View -->
-    <template v-else>
-      <!-- Loading（加载中或尚未开始加载时显示） -->
-      <div v-if="articleLoading || !articleLoaded" class="card p-8 text-center text-themed-muted">
-        <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
+          <!-- Pagination -->
+          <div v-if="totalPages > 1" class="flex items-center justify-between text-sm text-themed-muted">
+            <span>{{ $t('help.totalArticles', { count: total }) }}</span>
+            <div class="flex items-center gap-2">
+              <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ $t('instance.prevPage') }}</button>
+              <span>{{ page }} / {{ totalPages }}</span>
+              <button :disabled="page >= totalPages" class="btn-ghost btn-sm" @click="page++; loadArticles()">{{ $t('instance.nextPage') }}</button>
+            </div>
+          </div>
+        </template>
 
-      <!-- Not Found（仅在加载完成后且文章为空时显示） -->
-      <div v-else-if="articleLoaded && !currentArticle" class="card p-8 text-center">
-        <svg class="w-12 h-12 mx-auto text-themed-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p class="text-themed-muted mb-4">{{ $t('help.articleNotFound') }}</p>
-        <button class="btn-secondary" @click="goBack">{{ $t('help.backToHelp') }}</button>
-      </div>
+        <!-- Article Detail View -->
+        <template v-else>
+          <!-- Loading（加载中或尚未开始加载时显示） -->
+          <div v-if="articleLoading || !articleLoaded" class="card p-8 text-center text-themed-muted">
+            <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
 
-      <!-- Article Content -->
-      <div v-else class="card p-6 md:p-8">
-        <div class="markdown-body" v-html="articleHtml"></div>
+          <!-- Not Found（仅在加载完成后且文章为空时显示） -->
+          <div v-else-if="articleLoaded && !currentArticle" class="card p-8 text-center">
+            <svg class="w-12 h-12 mx-auto text-themed-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-themed-muted mb-4">{{ $t('help.articleNotFound') }}</p>
+            <button class="btn-secondary" @click="goBack">{{ $t('help.backToHelp') }}</button>
+          </div>
+
+          <!-- Article Content -->
+          <div v-else class="card p-6 md:p-8">
+            <div class="markdown-body" v-html="articleHtml"></div>
+          </div>
+        </template>
       </div>
-    </template>
     </div>
-  </div>
   </PublicSiteLayout>
 </template>
 

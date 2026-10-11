@@ -1803,8 +1803,8 @@ async function confirmBatchDestroy(): Promise<void> {
                   />
                 </div>
                 <div class="flex-1 min-w-0 cursor-pointer" @click="openInstanceDetail(instance.id)">
-                    <div class="flex items-center gap-2 mb-1">
-                      <div
+                  <div class="flex items-center gap-2 mb-1">
+                    <div
                       class="font-semibold truncate"
                       :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
                     >

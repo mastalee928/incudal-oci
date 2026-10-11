@@ -911,6 +911,43 @@ export interface UpdateHostGroupsRequest {
   regionGroupId?: number | null
 }
 
+// ==================== 一机一卖：池子定价 ====================
+// 池子 = 机型分组 + 核心数 + 地区 + 磁盘档；一行 = 一个可售商品，没有行 = 不卖。
+// 价格单位是「分」，与后端 PackagePlan.price 一致。
+export interface HostPoolPrice {
+  id: number
+  machineGroupId: number
+  resourcePreset: ResourcePreset
+  regionGroupId: number
+  diskGiB: number
+  name: string | null
+  monthlyPrice: number
+  setupFee: number
+  active: boolean
+  sortOrder: number
+  regionGroup?: { id: number; name: string; countryCode: string | null }
+  machineGroup?: { id: number; name: string }
+}
+export interface HostPoolPriceInput {
+  machineGroupId: number
+  resourcePreset: ResourcePreset
+  regionGroupId: number
+  diskGiB: number
+  name?: string | null
+  monthlyPrice: number
+  setupFee: number
+  active?: boolean
+  sortOrder?: number
+}
+export interface HostPoolInventoryRow {
+  machineGroupId: number
+  resourcePreset: string | null
+  regionGroupId: number | null
+  diskGiB: number | null
+  total: number
+  idle: number
+}
+
 export interface Host {
   id: number
   name: string

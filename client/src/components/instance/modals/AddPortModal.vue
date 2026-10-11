@@ -322,48 +322,48 @@ function close(): void {
               </div>
 
               <template v-if="addMode === 'single'">
-              <div>
-                <label class="block text-xs text-gray-500 mb-1.5">
-                  {{ t('portModal.privatePort') }} 
-                  <span class="text-red-500">{{ t('portModal.privatePortRequired') }}</span>
-                </label>
-                <input 
-                  v-model="form.privatePort" 
-                  type="text" 
-                  class="input" 
-                  :placeholder="t('portModal.privatePortPlaceholderRange')"
-                />
-                <p 
-                  class="text-xs mt-1.5"
-                  :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
-                >
-                  {{ t('portModal.rangeHint') }}
-                </p>
-              </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1.5">
+                    {{ t('portModal.privatePort') }} 
+                    <span class="text-red-500">{{ t('portModal.privatePortRequired') }}</span>
+                  </label>
+                  <input 
+                    v-model="form.privatePort" 
+                    type="text" 
+                    class="input" 
+                    :placeholder="t('portModal.privatePortPlaceholderRange')"
+                  />
+                  <p 
+                    class="text-xs mt-1.5"
+                    :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
+                  >
+                    {{ t('portModal.rangeHint') }}
+                  </p>
+                </div>
 
-              <div>
-                <label class="block text-xs text-gray-500 mb-1.5">
-                  {{ t('portModal.publicPort') }} 
-                  <span class="text-gray-400">{{ t('portModal.publicPortOptional') }}</span>
-                </label>
-                <input 
-                  v-model="form.publicPort" 
-                  type="text" 
-                  class="input" 
-                  :placeholder="t('portModal.publicPortPlaceholderRange')"
-                />
-                <p 
-                  class="text-xs mt-1.5"
-                  :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
-                >
-                  <template v-if="props.portRangeStart && props.portRangeEnd">
-                    {{ t('portModal.publicPortHintWithRange', { start: props.portRangeStart, end: props.portRangeEnd }) }}
-                  </template>
-                  <template v-else>
-                    {{ t('portModal.publicPortHint') }}
-                  </template>
-                </p>
-              </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1.5">
+                    {{ t('portModal.publicPort') }} 
+                    <span class="text-gray-400">{{ t('portModal.publicPortOptional') }}</span>
+                  </label>
+                  <input 
+                    v-model="form.publicPort" 
+                    type="text" 
+                    class="input" 
+                    :placeholder="t('portModal.publicPortPlaceholderRange')"
+                  />
+                  <p 
+                    class="text-xs mt-1.5"
+                    :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
+                  >
+                    <template v-if="props.portRangeStart && props.portRangeEnd">
+                      {{ t('portModal.publicPortHintWithRange', { start: props.portRangeStart, end: props.portRangeEnd }) }}
+                    </template>
+                    <template v-else>
+                      {{ t('portModal.publicPortHint') }}
+                    </template>
+                  </p>
+                </div>
               </template>
 
               <template v-else>

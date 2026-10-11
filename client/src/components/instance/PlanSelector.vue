@@ -289,7 +289,8 @@ function handleSelect(plan: PackagePlan): void {
           </div>
           <!-- 价格 -->
           <div class="text-right flex-shrink-0">
-            <div v-if="plan.billingMode !== 'hourly'"
+            <div
+              v-if="plan.billingMode !== 'hourly'"
               class="text-xl font-bold"
               :class="themeStore.isDark ? 'text-white' : 'text-gray-900'"
             >

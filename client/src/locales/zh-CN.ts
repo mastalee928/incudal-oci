@@ -209,6 +209,37 @@ export default {
             "ONBOARDING_STEP_FAILED": "当前阶段失败，请检查宿主机后重试。"
         }
     },
+    hostPools: {
+        title: '池子定价',
+        description: '一机一卖的商品与价格。池子 = 机型 + 核心 + 地区 + 磁盘档；一个池子就是一个商品，唯一变量是价格。',
+        core: '机型 / 核心',
+        priceView: '价格视图',
+        monthlyPrice: '月费',
+        setupFee: '初装费',
+        region: '地区',
+        emptyHint: '留空 = 该地区该档位不卖；初装费填 0 = 不收。价格单位是元。',
+        notSold: '不卖',
+        freeSetup: '0 = 不收',
+        stock: '空闲 {idle} / 共 {total}',
+        noStock: '暂无机器',
+        noMachineGroup: '还没有对应的机型分组，请先在「主机接入与管理」里创建。',
+        noMachines: '该机型下还没有接入机器。先在「主机接入与管理」接入，并给机器指定这个机型的磁盘档。',
+        save: '保存定价',
+        saving: '保存中...',
+        saved: '定价已保存',
+        saveFailed: '保存失败，请重试。',
+        invalidPrice: '价格只能是数字，且不超过 99999999。',
+        nothingChanged: '没有改动',
+        loadFailed: '定价加载失败，请刷新重试。',
+        continent: {
+            'asia-pacific': '亚太地区',
+            'north-america': '北美地区',
+            'europe': '欧洲',
+            'middle-east-africa': '中东和非洲地区',
+            'south-america': '南美地区',
+            'other': '其他'
+        }
+    },
     hostInventory: {
         "manageGroups": "管理分组",
         "addMachine": "新增机型分组",

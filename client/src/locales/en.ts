@@ -209,6 +209,37 @@ export default {
             "ONBOARDING_STEP_FAILED": "The current stage failed. Check the host and retry."
         }
     },
+    hostPools: {
+        title: 'Pool Pricing',
+        description: 'Products and prices for one-machine-one-sale. A pool is machine type + cores + region + disk tier; one pool is one product, and the price is the only variable.',
+        core: 'Machine / cores',
+        priceView: 'Price view',
+        monthlyPrice: 'Monthly fee',
+        setupFee: 'Setup fee',
+        region: 'Region',
+        emptyHint: 'Leave a cell empty to stop selling it. Setup fee 0 means no setup fee. Prices are in yuan.',
+        notSold: 'Not sold',
+        freeSetup: '0 = none',
+        stock: 'idle {idle} / {total}',
+        noStock: 'No machines',
+        noMachineGroup: 'No matching machine group yet. Create one under Host Onboarding first.',
+        noMachines: 'No machines onboarded for this type yet. Onboard one under Host Onboarding and set its disk tier.',
+        save: 'Save prices',
+        saving: 'Saving...',
+        saved: 'Prices saved',
+        saveFailed: 'Save failed. Please try again.',
+        invalidPrice: 'Prices must be numbers no greater than 99999999.',
+        nothingChanged: 'Nothing changed',
+        loadFailed: 'Could not load prices. Please refresh.',
+        continent: {
+            'asia-pacific': 'Asia Pacific',
+            'north-america': 'North America',
+            'europe': 'Europe',
+            'middle-east-africa': 'Middle East & Africa',
+            'south-america': 'South America',
+            'other': 'Other'
+        }
+    },
     hostInventory: {
         "manageGroups": "Manage groups",
         "addMachine": "Add machine group",

@@ -133,7 +133,10 @@ export interface InstancePriceAdjustmentQuote {
  */
 export function calculateCreateBilling(plan: PackagePlan): CreateBillingResult {
   const price = Number(plan.price) / 100  // 分转元
-  const totalPrice = price  // 不再计算开通费
+  // 初装费一次性收取：只在下单时计入。续费走 calculateRenewBilling，它只读实例上
+  // 存下的 billingPrice、从不看方案的 setupFee，所以「首次收、续费不收」自动成立。
+  const setupFee = Number(plan.setupFee) / 100
+  const totalPrice = Number((price + setupFee).toFixed(2))
 
   // 计算到期时间（根据计费周期）
   const expiresAt = addMonths(new Date(), plan.billingCycle)
@@ -142,7 +145,7 @@ export function calculateCreateBilling(plan: PackagePlan): CreateBillingResult {
     plan,
     price,
     billingCycle: plan.billingCycle,
-    setupFee: 0,  // 开通费已废弃
+    setupFee,
     totalPrice,
     expiresAt
   }

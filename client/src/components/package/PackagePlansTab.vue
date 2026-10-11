@@ -67,12 +67,12 @@ function formatPrice(cents: number | null): string {
   return `¥${(cents / 100).toFixed(2)}`
 }
 
-function openCreatePlan(): void {
-  router.push({ name: 'my-package-plan-create', params: { id: props.pkg.id } })
-}
-
-function openEditPlan(plan: PackagePlan): void {
-  router.push({ name: 'my-package-plan-edit', params: { id: props.pkg.id, planId: plan.id } })
+/**
+ * 一机一卖：方案不再手工创建或编辑——池子定价表保存时自动生成影子方案，
+ * 月费与初装费都在定价表里改，所以「编辑」直接指向定价表。
+ */
+function openEditPlan(_plan: PackagePlan): void {
+  router.push({ name: 'admin-host-pools' })
 }
 
 async function updatePlanStatus(plan: PackagePlan, status: PlanStatus): Promise<void> {
@@ -119,12 +119,6 @@ async function deletePlan(plan: PackagePlan): Promise<void> {
         <h2 class="text-lg font-semibold text-themed">{{ t('resources.plans.title') }}</h2>
         <p class="mt-1 text-sm text-themed-muted">{{ t('resources.plans.listDescription') }}</p>
       </div>
-      <button type="button" class="btn-primary" @click="openCreatePlan">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        {{ t('resources.plans.add') }}
-      </button>
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -160,7 +154,6 @@ async function deletePlan(plan: PackagePlan): Promise<void> {
       </div>
       <p class="text-sm font-medium text-themed">{{ t('resources.plans.noPlans') }}</p>
       <p class="mt-1 text-xs text-themed-muted">{{ t('resources.plans.noPlansHint') }}</p>
-      <button type="button" class="btn-primary mt-5" @click="openCreatePlan">{{ t('resources.plans.add') }}</button>
     </div>
 
     <div v-else class="space-y-3">

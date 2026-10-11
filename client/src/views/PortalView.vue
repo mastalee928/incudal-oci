@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 落地页 / 门户页（一机一卖）
+ *
+ * 展示在售的池子商品：一台宿主机只卖给一位客户，整机独享。
+ * 数据源与购买页相同（/packages/public/catalog），只挑选最便宜的几个做橱窗。
+ */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,13 +13,13 @@ import { usePageSeo } from '@/composables/usePageSeo'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
+import FlagIcon from '@/components/FlagIcon.vue'
 import {
+  formatMemoryMiB,
   formatPublicPrice,
-  getPackageTrafficLabel,
-  getStartingMonthlyPrice,
-  type PackageSource,
-  type PublicPackage,
-  type PublicRegion
+  presetLabel,
+  type PoolCatalogProduct,
+  type PoolCatalogRegion
 } from '@/utils/publicCatalog'
 
 defineOptions({
@@ -26,34 +32,43 @@ const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const brand = useBrand()
 
-const packages = ref<PublicPackage[]>([])
-const regions = ref<PublicRegion[]>([])
+const regions = ref<PoolCatalogRegion[]>([])
 const loading = ref(true)
 
-const spotlightPackages = computed(() => {
-  const allPackages = [...packages.value].sort((left, right) => {
-    if (left.soldOut !== right.soldOut) {
-      return left.soldOut ? 1 : -1
+interface SpotlightProduct {
+  product: PoolCatalogProduct
+  region: PoolCatalogRegion
+}
+
+/** 全部在售商品（扁平化），橱窗从中挑最便宜的四个。 */
+const allProducts = computed<SpotlightProduct[]>(() => {
+  const flattened: SpotlightProduct[] = []
+  for (const region of regions.value) {
+    for (const product of region.products) {
+      flattened.push({ product, region })
     }
+  }
+  return flattened
+})
 
-    const leftPrice = getStartingMonthlyPrice(left)
-    const rightPrice = getStartingMonthlyPrice(right)
+const spotlightProducts = computed<SpotlightProduct[]>(() => {
+  const inStock = allProducts.value.filter(item => item.product.idle > 0)
+  const pool = inStock.length > 0 ? inStock : allProducts.value
+  return [...pool]
+    .sort((left, right) => left.product.monthlyPrice - right.product.monthlyPrice)
+    .slice(0, 4)
+})
 
-    if (leftPrice !== null && rightPrice !== null && leftPrice !== rightPrice) {
-      return leftPrice - rightPrice
-    }
-
-    return left.name.localeCompare(right.name, 'zh')
-  })
-
-  return allPackages.slice(0, 4)
+const minMonthlyPrice = computed<number | null>(() => {
+  if (allProducts.value.length === 0) return null
+  return allProducts.value.reduce((min, item) => Math.min(min, item.product.monthlyPrice), allProducts.value[0].product.monthlyPrice)
 })
 
 const statCards = computed(() => [
-  { label: t('publicSite.portal.stats.packages'), value: String(packages.value.length) },
-  { label: t('publicSite.portal.stats.regions'), value: String(regions.value.length) },
-  { label: t('publicSite.portal.stats.official'), value: String(packages.value.filter(pkg => pkg.sourceType === 'official').length) },
-  { label: t('publicSite.portal.stats.market'), value: String(packages.value.filter(pkg => pkg.sourceType === 'market').length) }
+  { label: t('publicSite.market.summary.regions'), value: String(regions.value.length) },
+  { label: t('publicSite.market.summary.total'), value: String(allProducts.value.length) },
+  { label: t('hostPools.core'), value: String(new Set(allProducts.value.map(item => item.product.resourcePreset)).size) },
+  { label: t('hostPools.monthlyPrice'), value: minMonthlyPrice.value === null ? '-' : `¥${formatPublicPrice(minMonthlyPrice.value)}` }
 ])
 
 const platformCards = computed(() => [
@@ -68,31 +83,6 @@ const platformCards = computed(() => [
   {
     title: t('publicSite.portal.experienceThemeTitle'),
     description: t('publicSite.portal.experienceThemeDescription')
-  }
-])
-
-const ecosystemCards = computed(() => [
-  {
-    key: 'official',
-    source: 'official' as PackageSource,
-    title: t('publicSite.portal.officialTitle'),
-    description: t('publicSite.portal.officialDescription'),
-    points: [
-      t('publicSite.portal.officialPoint1'),
-      t('publicSite.portal.officialPoint2'),
-      t('publicSite.portal.officialPoint3')
-    ]
-  },
-  {
-    key: 'market',
-    source: 'market' as PackageSource,
-    title: t('publicSite.portal.marketTitle'),
-    description: t('publicSite.portal.marketDescription'),
-    points: [
-      t('publicSite.portal.marketPoint1'),
-      t('publicSite.portal.marketPoint2'),
-      t('publicSite.portal.marketPoint3')
-    ]
   }
 ])
 
@@ -115,11 +105,10 @@ const ui = computed(() => themeStore.isDark
       terminalCard: 'border border-gray-800 bg-black text-gray-300', terminalMeta: 'text-gray-600',
       platformCard: 'border border-gray-800 bg-gray-900 text-gray-100', platformTitle: 'text-gray-100', platformBody: 'text-gray-400',
       sectionLabel: 'text-gray-500', sectionBody: 'text-gray-400',
-      ecosystemOfficialCard: 'border border-gray-800 bg-gray-950 text-gray-100', ecosystemMarketCard: 'border border-gray-800 bg-gray-950 text-gray-100',
-      ecosystemOfficialBody: 'text-gray-400', ecosystemMarketBody: 'text-gray-400', ecosystemOfficialList: 'text-gray-300', ecosystemMarketList: 'text-gray-300',
-      ecosystemOfficialButton: 'bg-white text-gray-900 hover:bg-gray-100', ecosystemMarketButton: 'border border-gray-700 text-gray-100 hover:bg-gray-900',
       browseWrap: 'border border-gray-800 bg-gray-950', browseCard: 'border border-gray-800 hover:border-gray-700',
-      emptyState: 'border-gray-800 bg-gray-950 text-gray-500', skeleton: 'bg-gray-800'
+      emptyState: 'border-gray-800 bg-gray-950 text-gray-500', skeleton: 'bg-gray-800',
+      chipStock: 'border border-emerald-400/40 text-emerald-300',
+      chipSoldOut: 'border border-red-400/40 text-red-300'
     }
   : {
       badge: 'border-gray-200 bg-white text-gray-600', body: 'text-gray-600',
@@ -131,11 +120,10 @@ const ui = computed(() => themeStore.isDark
       terminalCard: 'border border-gray-800 bg-gray-950 text-gray-200', terminalMeta: 'text-gray-500',
       platformCard: 'border border-gray-200 bg-gray-50 text-gray-900', platformTitle: 'text-gray-900', platformBody: 'text-gray-600',
       sectionLabel: 'text-gray-500', sectionBody: 'text-gray-600',
-      ecosystemOfficialCard: 'border border-gray-200 bg-white text-gray-900 shadow-sm', ecosystemMarketCard: 'border border-gray-200 bg-white text-gray-900 shadow-sm',
-      ecosystemOfficialBody: 'text-gray-600', ecosystemMarketBody: 'text-gray-600', ecosystemOfficialList: 'text-gray-700', ecosystemMarketList: 'text-gray-700',
-      ecosystemOfficialButton: 'bg-gray-900 text-white hover:bg-gray-700', ecosystemMarketButton: 'border border-gray-300 text-gray-900 hover:bg-gray-100',
       browseWrap: 'border border-gray-200 bg-gray-50', browseCard: 'border border-gray-200 hover:border-gray-300 hover:shadow-sm',
-      emptyState: 'border-gray-300 bg-white text-gray-500', skeleton: 'bg-gray-200'
+      emptyState: 'border-gray-300 bg-white text-gray-500', skeleton: 'bg-gray-200',
+      chipStock: 'border border-emerald-600/40 text-emerald-700',
+      chipSoldOut: 'border border-red-600/40 text-red-700'
     }
 )
 
@@ -146,76 +134,29 @@ usePageSeo(() => ({
   keywords: t('publicSite.seo.keywords').replace(/Incudal/g, brand.brandName)
 }))
 
-function formatPackageTraffic(pkg: PublicPackage): string {
-  return getPackageTrafficLabel(pkg, t('common.unlimited'))
+function productPriceLabel(item: SpotlightProduct): string {
+  return t('publicSite.market.fromMonthly', { price: formatPublicPrice(item.product.monthlyPrice) })
 }
 
-function getPriceLabel(pkg: PublicPackage): string {
-  const startPrice = getStartingMonthlyPrice(pkg)
-  if (startPrice === null) {
-    return t('publicSite.market.free')
-  }
-
-  return t('publicSite.market.fromMonthly', { price: formatPublicPrice(startPrice) })
-}
-
-function getSourceChipClass(source: PackageSource): string {
-  void source
-  return themeStore.isDark ? 'border border-gray-700 text-gray-300' : 'border border-gray-300 text-gray-600'
-}
-
-function getSourceDotClass(source: PackageSource): string {
-  void source
-  return themeStore.isDark ? 'bg-gray-500' : 'bg-gray-400'
-}
-
-function getInstanceChipClass(instanceType: string): string {
-  if (instanceType === 'vm') {
-    return themeStore.isDark ? 'border border-gray-700 text-gray-300' : 'border border-gray-300 text-gray-600'
-  }
-
-  return themeStore.isDark
-    ? 'border border-gray-700 text-gray-400'
-    : 'border border-gray-300 text-gray-500'
-}
-
-function getEcosystemCardClass(source: PackageSource): string {
-  if (source === 'official') {
-    return themeStore.isDark ? ui.value.ecosystemOfficialCard : ui.value.ecosystemOfficialCard
-  }
-  return themeStore.isDark ? ui.value.ecosystemMarketCard : ui.value.ecosystemMarketCard
-}
-
-function getPackageCardClass(_source: PackageSource): string {
-  return themeStore.isDark
-    ? 'bg-gray-950 hover:bg-gray-900'
-    : 'bg-white hover:bg-gray-50'
-}
-
-function getPriceTextClass(source: PackageSource): string {
-  if (source === 'official') {
-    return themeStore.isDark ? 'text-gray-100' : 'text-gray-900'
-  }
-  return themeStore.isDark ? 'text-gray-300' : 'text-gray-700'
-}
-
-function browseCatalog(source?: PackageSource): void {
-  void router.push({
-    path: '/market',
-    query: source ? { source } : undefined
+function productSpecLabel(item: SpotlightProduct): string {
+  return t('publicSite.market.pool.spec', {
+    cpu: item.product.cpu,
+    memory: formatMemoryMiB(item.product.memoryMiB),
+    disk: item.product.diskGiB
   })
 }
 
-function goToHostingGuide(): void {
-  void router.push({ name: 'help-article', params: { slug: 'hosting-tutorial' } })
+function browseCatalog(): void {
+  void router.push({ path: '/market' })
 }
 
-function openPackage(pkg: PublicPackage): void {
+function openProduct(item: SpotlightProduct): void {
   void router.push({
     path: '/market',
     query: {
-      source: pkg.sourceType,
-      package: String(pkg.id)
+      region: String(item.region.id),
+      preset: item.product.resourcePreset,
+      product: String(item.product.id)
     }
   })
 }
@@ -234,16 +175,10 @@ async function loadCatalog(): Promise<void> {
   loading.value = true
 
   try {
-    const [packagesResponse, regionsResponse] = await Promise.all([
-      api.packages.listPublic(),
-      api.packages.getPublicRegions()
-    ])
-
-    packages.value = (packagesResponse.packages || []) as unknown as PublicPackage[]
-    regions.value = regionsResponse.regions || []
+    const response = await api.packages.getPublicCatalog()
+    regions.value = response.regions || []
   } catch (error) {
     console.error('Failed to load public catalog:', error)
-    packages.value = []
     regions.value = []
   } finally {
     loading.value = false
@@ -265,7 +200,7 @@ onMounted(() => {
             :class="ui.badge"
           >
             <span class="h-1.5 w-1.5 rounded-lg" :class="themeStore.isDark ? 'bg-[#a8c7fa]' : 'bg-[#0b57d0]'"></span>
-            {{ t('publicSite.portal.badge') }}
+            {{ t('publicSite.market.pool.badge') }}
           </div>
 
           <h1 class="mt-6 text-4xl font-normal tracking-[-0.02em] sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]">
@@ -374,73 +309,6 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-7xl">
-        <div class="max-w-2xl">
-          <div class="text-xs font-medium" :class="ui.sectionLabel">
-            {{ t('publicSite.portal.catalogLabel') }}
-          </div>
-          <h2 class="mt-4 text-3xl font-normal tracking-[-0.02em] sm:text-[2.25rem] sm:leading-[1.15]">
-            {{ t('publicSite.portal.catalogTitle') }}
-          </h2>
-          <p class="mt-4 text-base leading-7" :class="ui.sectionBody">
-            {{ t('publicSite.portal.catalogDescription') }}
-          </p>
-        </div>
-
-        <div class="mt-10 grid gap-6 lg:grid-cols-2">
-          <article
-            v-for="line in ecosystemCards"
-            :key="line.key"
-            class="rounded-xl p-7 transition-shadow duration-150"
-            :class="getEcosystemCardClass(line.source)"
-          >
-            <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 class="text-2xl font-normal tracking-[-0.02em]">
-                  {{ line.title }}
-                </h3>
-                <p class="mt-3 text-sm leading-6" :class="line.source === 'official' ? ui.ecosystemOfficialBody : ui.ecosystemMarketBody">
-                  {{ line.description }}
-                </p>
-              </div>
-              <span
-                class="rounded-lg px-2.5 py-1 text-[11px] font-medium tracking-[0.02em]"
-                :class="getSourceChipClass(line.source)"
-              >
-                {{ line.source === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
-              </span>
-            </div>
-
-            <div class="mt-6 space-y-3 text-sm" :class="line.source === 'official' ? ui.ecosystemOfficialList : ui.ecosystemMarketList">
-              <div v-for="point in line.points" :key="point" class="flex items-start gap-3">
-                <span class="mt-1.5 h-1.5 w-1.5 rounded-lg" :class="getSourceDotClass(line.source)"></span>
-                <span>{{ point }}</span>
-              </div>
-            </div>
-
-            <div class="mt-6 flex flex-wrap gap-3">
-              <button
-                class="inline-flex h-10 items-center gap-2 rounded-lg px-6 text-sm font-medium transition-colors duration-150"
-                :class="line.source === 'official' ? ui.ecosystemOfficialButton : ui.ecosystemMarketButton"
-                @click="browseCatalog(line.source)"
-              >
-                {{ line.source === 'official' ? t('publicSite.actions.browseOfficial') : t('publicSite.actions.browseMarket') }}
-              </button>
-              <button
-                v-if="line.source === 'market'"
-                class="inline-flex h-10 items-center gap-2 rounded-lg border px-5 text-sm font-medium transition-colors duration-150"
-                :class="ui.ecosystemMarketButton"
-                @click="goToHostingGuide"
-              >
-                {{ t('publicSite.actions.viewHostingTutorial') }}
-              </button>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
-
     <section class="px-4 pb-20 sm:px-6 lg:px-8">
       <div
         class="mx-auto max-w-7xl rounded-xl px-6 py-10 sm:px-10"
@@ -452,10 +320,13 @@ onMounted(() => {
               {{ t('publicSite.portal.browseLabel') }}
             </div>
             <h2 class="mt-4 text-3xl font-normal tracking-[-0.02em] sm:text-[2.25rem] sm:leading-[1.15]">
-              {{ t('publicSite.portal.browseTitle') }}
+              {{ t('publicSite.market.pool.title') }}
             </h2>
             <p class="mt-4 text-base leading-7" :class="ui.sectionBody">
-              {{ t('publicSite.portal.browseDescription') }}
+              {{ t('publicSite.market.pool.description') }}
+            </p>
+            <p class="mt-2 text-sm" :class="ui.sectionLabel">
+              {{ t('publicSite.market.pool.regionsCount', { count: regions.length }) }} · {{ t('publicSite.market.pool.productsCount', { count: allProducts.length }) }}
             </p>
           </div>
 
@@ -478,43 +349,41 @@ onMounted(() => {
             ></div>
           </template>
 
-          <template v-else-if="spotlightPackages.length > 0">
+          <template v-else-if="spotlightProducts.length > 0">
             <button
-              v-for="pkg in spotlightPackages"
-              :key="pkg.id"
+              v-for="item in spotlightProducts"
+              :key="item.product.id"
               class="flex flex-col gap-4 rounded-lg p-5 text-left transition-[background-color,box-shadow] duration-150 sm:flex-row sm:items-start sm:justify-between"
-              :class="[ui.browseCard, getPackageCardClass(pkg.sourceType)]"
-              @click="openPackage(pkg)"
+              :class="[ui.browseCard, themeStore.isDark ? 'bg-gray-950 hover:bg-gray-900' : 'bg-white hover:bg-gray-50']"
+              @click="openProduct(item)"
             >
               <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <span
                     class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                    :class="getSourceChipClass(pkg.sourceType)"
+                    :class="item.product.idle > 0 ? ui.chipStock : ui.chipSoldOut"
                   >
-                    {{ pkg.sourceType === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
+                    {{ item.product.idle > 0 ? t('publicSite.market.pool.idle', { idle: item.product.idle }) : t('publicSite.market.pool.soldOut') }}
                   </span>
-                  <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                    :class="getInstanceChipClass(pkg.instance_type)"
-                  >
-                    {{ pkg.instance_type === 'vm' ? 'KVM' : 'LXC' }}
+                  <span class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]" :class="ui.badge">
+                    {{ presetLabel(item.product.resourcePreset) }}
                   </span>
                 </div>
-                <div class="mt-3 truncate text-lg font-medium" :class="ui.platformTitle">
-                  {{ pkg.name }}
+                <div class="mt-3 flex items-center gap-2 text-lg font-medium" :class="ui.previewTitle">
+                  <FlagIcon v-if="item.region.countryCode" :code="item.region.countryCode" size="xs" />
+                  <span class="truncate">{{ item.region.name }}</span>
                 </div>
-                <div class="portal-package-description mt-2 text-sm leading-5" :class="ui.sectionBody">
-                  {{ pkg.description || t('publicSite.portal.packageFallback') }}
+                <div class="mt-2 text-sm leading-5" :class="ui.sectionBody">
+                  {{ productSpecLabel(item) }}
                 </div>
               </div>
 
               <div class="sm:shrink-0 sm:text-right">
-                <div class="text-sm font-medium" :class="getPriceTextClass(pkg.sourceType)">
-                  {{ getPriceLabel(pkg) }}
+                <div class="text-sm font-medium">
+                  {{ productPriceLabel(item) }}
                 </div>
                 <div class="mt-1 text-xs" :class="ui.statLabel">
-                  {{ formatPackageTraffic(pkg) }}
+                  {{ item.product.diskGiB }} GiB
                 </div>
               </div>
             </button>
@@ -525,25 +394,10 @@ onMounted(() => {
             class="rounded-lg border border-dashed px-4 py-8 text-center text-sm"
             :class="ui.emptyState"
           >
-            {{ t('publicSite.portal.emptyPackages') }}
+            {{ t('publicSite.market.pool.empty') }}
           </div>
         </div>
       </div>
     </section>
   </div>
 </template>
-
-<style scoped>
-.portal-package-description {
-  display: -webkit-box;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  text-overflow: ellipsis;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-</style>

@@ -150,10 +150,6 @@ function goToPackagesPage(p: number | string): void {
   packagesPage.value = p
 }
 
-function openCreate(): void {
-  router.push({ name: 'my-package-create' })
-}
-
 function openDetail(pkg: Package): void {
   router.push({ name: 'my-package-detail', params: { id: pkg.id } })
 }
@@ -308,13 +304,7 @@ async function copyShareLink(pkg: Package): Promise<void> {
           </svg>
         </div>
       </div>
-
-      <button v-if="scope === 'mine'" type="button" class="btn-primary" @click="openCreate">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        {{ t('resources.packages.create') }}
-      </button>
+      <!-- 一机一卖：套餐不再手工创建，池子定价表保存时会自动生成影子套餐与方案。 -->
     </div>
 
     <SkeletonLoader v-if="loading" type="list" />

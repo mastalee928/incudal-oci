@@ -46,7 +46,7 @@ const footerTelegramLink = computed(() => {
   return link || null
 })
 
-const hiddenExpandMenuNames = new Set(['my-hosts', 'my-packages', 'hosting-wallet'])
+const hiddenExpandMenuNames = new Set(['my-hosts', 'hosting-wallet'])
 const hiddenWhenTicketDisabledMenuNames = new Set(['tickets'])
 const shouldHideHostingFeature = computed(() =>
   !authStore.isAdmin && authStore.user?.canAccessHostingFeature === false
@@ -66,7 +66,6 @@ const userMenuItems: MenuItem[] = [
   { name: 'invites', path: '/invites', icon: 'key', label: 'nav.invites' },
   { divider: true, label: 'nav.expand' },
   { name: 'my-hosts', path: '/resources/hosts', icon: 'database', label: 'nav.hosts' },
-  { name: 'my-packages', path: '/resources/packages', icon: 'package', label: 'nav.packages' },
   { name: 'hosting-wallet', path: '/hosting-wallet', icon: 'coin', label: 'nav.earnings' },
   { divider: true, label: 'nav.system' },
   { name: 'profile', path: '/profile', icon: 'settings', label: 'nav.settings' },
@@ -85,7 +84,6 @@ const adminOnlyMenuItems: MenuItem[] = [
   { name: 'my-hosts', path: '/resources/hosts', icon: 'database', label: 'nav.hosts' },
   { name: 'admin-host-onboarding', path: '/admin/host-onboarding', icon: 'server', label: 'onboarding.title' },
   { name: 'admin-host-pools', path: '/admin/host-pools', icon: 'coin', label: 'hostPools.title' },
-  { name: 'my-packages', path: '/resources/packages', icon: 'package', label: 'nav.packages' },
   { name: 'admin-images', path: '/admin/images', icon: 'image', label: 'nav.images' },
   { name: 'admin-instance-create', path: '/admin/instances/create', icon: 'gift', label: 'nav.create' },
   { divider: true, label: 'nav.operations' },

@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import { OnboardingError, RESOURCE_PRESETS, type ResourcePreset } from '../lib/host-onboarding.js'
 import { presetQuota } from '../lib/onboarding-resources.js'
-import { HOST_OCCUPIED_INSTANCE_WHERE } from '../lib/host-resource-usage.js'
+import { HOST_OCCUPIED_INSTANCE_WHERE, dedicatedHostReadyWhere } from '../lib/host-resource-usage.js'
 import { lockHostGroups } from './host-groups.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
@@ -75,7 +75,11 @@ async function ensureShadowPackage(tx: DbClient, preset: ResourcePreset, ownerId
     siteLimit: 0,
     monthlyTrafficLimit: null, // null = 不限
     hidden: true,
-    active: true
+    active: true,
+    // 必须公开：canUserAccessPackage 只放行「自己的套餐」与「globalShared 的套餐」，
+    // 影子套餐归管理员所有，不设为公开客户就会在下单入口拿到 403。
+    // 旧的市场接口因此要过滤 hidden，避免影子套餐漏进旧页面。
+    globalShared: true
   }
   if (existing) return tx.package.update({ where: { id: existing.id }, data })
   return tx.package.create({ data: { userId: ownerId, name, description: '系统生成的池子套餐，不对用户展示', ...data } })
@@ -195,6 +199,22 @@ export async function deletePoolPrice(id: number) {
   })
 }
 
+/**
+ * 把池子商品解析成「影子套餐 + 影子方案」，供下单路径复用既有的创建流程。
+ *
+ * 这是影子机制的关键一环：解析出 id 之后，创建路径的计费、优惠券、AFF、到期
+ * 全部照旧工作，不需要为池子模型改任何一条。
+ */
+export async function resolvePoolProduct(poolPriceId: number) {
+  const price = await prisma.hostPoolPrice.findUnique({ where: { id: poolPriceId } })
+  if (!price || !price.active) return null
+  const shadowPackage = await prisma.package.findFirst({ where: { name: shadowPackageName(price.resourcePreset), hidden: true } })
+  if (!shadowPackage) return null
+  const shadowPlan = await prisma.packagePlan.findFirst({ where: { packageId: shadowPackage.id, name: shadowPlanName(price.id) } })
+  if (!shadowPlan) return null
+  return { price, packageId: shadowPackage.id, planId: shadowPlan.id }
+}
+
 /** 定价表：某个机型 + 核心下的全部行（含未上架的），供管理端渲染矩阵。 */
 export async function listPoolPrices(machineGroupId?: number, resourcePreset?: string) {
   const rows = await prisma.hostPoolPrice.findMany({
@@ -207,11 +227,16 @@ export async function listPoolPrices(machineGroupId?: number, resourcePreset?: s
 
 /**
  * 每个池子的库存：总台数与空闲台数。
- * 「空闲」= 没有占用实例，且机器已就绪（沿用与选择器同一套判据）。
+ *
+ * `readyOnly` 决定口径，两种用途必须分清：
+ * - 管理端定价页用 false：你给「池子」定价，不是给当前就绪的那几台定价，
+ *   机器离线也该看得见。
+ * - 购买页用 true：必须与分配器 `selectAvailableHost` 用**同一套就绪判据**，
+ *   否则会出现「页面显示有货、下单却挑不到机器」。
  */
-export async function poolInventory(): Promise<PoolInventoryRow[]> {
+export async function poolInventory(options: { readyOnly?: boolean } = {}): Promise<PoolInventoryRow[]> {
   const hosts = await prisma.host.findMany({
-    where: { singleTenant: true },
+    where: { singleTenant: true, ...(options.readyOnly ? dedicatedHostReadyWhere() : {}) },
     select: {
       machineGroupId: true,
       resourcePreset: true,

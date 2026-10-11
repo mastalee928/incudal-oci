@@ -1962,6 +1962,27 @@ const api = {
       const queryString = params.toString()
       return http.get(queryString ? `/packages/public/regions?${queryString}` : '/packages/public/regions')
     },
+    /**
+     * 一机一卖的公开商品目录（未登录可访问）。
+     * 按「洲 → 城市 → 机型/核心 → 磁盘档」浏览；库存与分配器同一套就绪判据，
+     * 所以页面显示有货就一定挑得到机器。没有定价行的池子不会出现在这里。
+     */
+    getPublicCatalog: (): Promise<{ regions: Array<{
+      id: number
+      name: string
+      countryCode: string | null
+      products: Array<{
+        id: number
+        resourcePreset: string
+        diskGiB: number
+        monthlyPrice: number
+        setupFee: number
+        cpu: number
+        memoryMiB: number
+        idle: number
+        total: number
+      }>
+    }> }> => http.get('/packages/public/catalog'),
     // 需要登录的 API
     list: (options?: { all?: boolean; source?: 'official' | 'market' | 'friends' | 'zone'; zoneId?: number; scope?: 'mine' | 'official' | 'hosted' }): Promise<{ packages: Package[]; total: number }> => {
       const params = new URLSearchParams()

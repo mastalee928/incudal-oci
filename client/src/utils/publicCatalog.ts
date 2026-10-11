@@ -167,3 +167,47 @@ export function getStartingMonthlyPrice(pkg: Pick<PublicPackage, 'isPaid' | 'pla
     return minPrice
   }, pricePlans[0].monthlyPrice)
 }
+
+// ==================== 一机一卖：池子商品目录 ====================
+// 池子 = 机型分组 + 核心数 + 地区 + 磁盘档；一行 = 一个可售商品，没有行 = 不卖。
+// 价格单位是「分」，与后端一致；展示前用 formatPublicPrice 转成元。
+
+export interface PoolCatalogProduct {
+  id: number
+  resourcePreset: string
+  diskGiB: number
+  monthlyPrice: number
+  setupFee: number
+  cpu: number
+  memoryMiB: number
+  /** 空闲台数（与分配器同一套就绪判据）。0 = 该档位无货，界面灰掉但保留展示。 */
+  idle: number
+  total: number
+}
+
+export interface PoolCatalogRegion {
+  id: number
+  name: string
+  countryCode: string | null
+  products: PoolCatalogProduct[]
+}
+
+/**
+ * 池子的系统架构。
+ * 客户不能指定机器，所以镜像必须由机型决定：E2 是 x86，ARM 各核心是 aarch64。
+ */
+export function architectureOfPreset(preset: string): 'x86_64' | 'aarch64' {
+  return preset.startsWith('ARM') ? 'aarch64' : 'x86_64'
+}
+
+/** 机型展示名：E2 保持原样，ARM 显示核心数（ARM2C → ARM 2C）。 */
+export function presetLabel(preset: string): string {
+  const matched = /^ARM(\d)C$/.exec(preset)
+  return matched ? `ARM ${matched[1]}C` : preset
+}
+
+/** 内存展示：MiB → GiB（整数或一位小数）。 */
+export function formatMemoryMiB(mib: number): string {
+  if (mib >= 1024) return `${(mib / 1024).toFixed(mib % 1024 === 0 ? 0 : 1)} GiB`
+  return `${mib} MiB`
+}

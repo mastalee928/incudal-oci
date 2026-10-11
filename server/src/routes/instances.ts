@@ -35,6 +35,7 @@ import {
 import { payPendingTrafficBillAndUnsuspend } from '../services/traffic-billing-scheduler.js'
 import { activateHourlyBilling, closeHourlyBilling, pauseHourlyBilling, resumeHourlyBilling, settleHourlyInstance } from '../services/hourly-billing-scheduler.js'
 import { hourlyPricingFromPackagePlan, validateHourlyResources } from '../lib/hourly-billing.js'
+import { resolvePoolProduct } from '../services/host-pool-prices.js'
 import { customAlphabet } from 'nanoid'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
@@ -782,13 +783,17 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: {
       name: string
-      packageId: number
+      // 一机一卖：客户端只给 poolPriceId，服务端解析出影子套餐与方案；
+      // 旧流程仍可直接给 packageId + planId。
+      poolPriceId?: number
+      packageId?: number
       planId?: number  // 付费方案ID
       image: string
       cpu?: number
       memory?: number
       disk?: number
-      hostId: number
+      // 一机一卖下由分配器按池子挑机器，客户端不指定；旧流程仍可指定。
+      hostId?: number
       sshKeyId?: number
       sshKey?: string
       password?: string
@@ -800,10 +805,14 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     schema: {
       body: {
         type: 'object',
-        required: ['name', 'packageId', 'image', 'hostId'],
+        // packageId / hostId 不再是必填：一机一卖下客户端只给 poolPriceId，
+        // 机器由分配器挑、影子套餐由服务端解析。这是放宽而非收紧，旧客户端不受影响。
+        required: ['name', 'image'],
         properties: {
           name: { type: 'string', minLength: 2, maxLength: 64 },
+          poolPriceId: { type: 'integer', minimum: 1 },
           packageId: { type: 'integer' },
+          planId: { type: 'integer', minimum: 1 },
           image: { type: 'string' },
           cpu: { type: 'integer', minimum: 15, maximum: 10000 },
           memory: { type: 'integer', minimum: 128, maximum: 524288 },
@@ -820,13 +829,14 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{
     Body: {
       name: string
-      packageId: number
+      poolPriceId?: number
+      packageId?: number
       planId?: number  // 付费方案ID
       image: string
       cpu?: number
       memory?: number
       disk?: number
-      hostId: number
+      hostId?: number
       sshKeyId?: number
       sshKey?: string
       password?: string
@@ -834,9 +844,30 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       promoCode?: string  // AFF 优惠码
     }
   }>, reply: FastifyReply) => {
-    const { name, packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode } = request.body
-    let { sshKey } = request.body
+    const { name, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode } = request.body
+    let { sshKey, packageId, planId, poolPriceId } = request.body
     const { user } = request
+
+    // 一机一卖：客户端只给 poolPriceId。解析成「影子套餐 + 影子方案」之后，
+    // 下面整条创建路径（计费、优惠券、AFF、到期封停）照旧工作，一处都不用改。
+    // 同时记下池子四维，交给分配器按池子挑机器——影子套餐没有绑定宿主机，
+    // 不传这四维的话选择器会退化成「该管理员的任意机器」。
+    let poolDimensions: { machineGroupId: number; regionGroupId: number; resourcePreset: string; diskGiB: number } | null = null
+    if (poolPriceId !== undefined) {
+      const resolved = await resolvePoolProduct(poolPriceId)
+      if (!resolved) return reply.code(400).send(apiError(ErrorCode.PACKAGE_UNAVAILABLE))
+      packageId = resolved.packageId
+      planId = resolved.planId
+      poolDimensions = {
+        machineGroupId: resolved.price.machineGroupId,
+        regionGroupId: resolved.price.regionGroupId,
+        resourcePreset: resolved.price.resourcePreset,
+        diskGiB: resolved.price.diskGiB
+      }
+    }
+    if (packageId === undefined) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '缺少套餐或池子商品'))
+    }
 
     // ==================== 阶段一: 验证与校验 ====================
 
@@ -1135,7 +1166,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       disk: requestedDisk,
       hostId: hostId,
       ownerId: pkg.user_id!,  // 套餐所有者ID，限制只能在其宿主机上创建实例
-      requireHourlyBillingEnabled: selectedPlanIsHourly
+      requireHourlyBillingEnabled: selectedPlanIsHourly,
+      poolMachineGroupId: poolDimensions?.machineGroupId,
+      poolRegionGroupId: poolDimensions?.regionGroupId,
+      poolResourcePreset: poolDimensions?.resourcePreset,
+      poolDiskGiB: poolDimensions?.diskGiB
     })
 
     console.log(`Pre-check result: ${preCheckHost ? preCheckHost.name : 'No available host'}`)
@@ -1296,7 +1331,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           hostId: hostId,
           ownerId: pkg.user_id!,
           portCount: reservedNatPortCount,
-          requireHourlyBillingEnabled: selectedPlanIsHourly
+          requireHourlyBillingEnabled: selectedPlanIsHourly,
+          poolMachineGroupId: poolDimensions?.machineGroupId,
+          poolRegionGroupId: poolDimensions?.regionGroupId,
+          poolResourcePreset: poolDimensions?.resourcePreset,
+          poolDiskGiB: poolDimensions?.diskGiB
         })
 
         if (!lockedHost) {
@@ -1465,6 +1504,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
             expiresAt: selectedPlanIsHourly ? null : (billing?.expiresAt ?? null),
             billingPrice: selectedPlanIsHourly ? null : (billing?.price ?? null),
             billingCycle: selectedPlanIsHourly ? null : (billing?.billingCycle ?? null),
+            // 记住它来自哪个池子商品。续费不看它（用实例上存下的 billingPrice），
+            // 但退租、统计，以及将来「退租后换 IP」需要这条归属。
+            poolPriceId: poolPriceId ?? null,
             trafficBillingMode: selectedPlan?.trafficBillingMode ?? 'package',
             trafficUnitPrice: selectedPlan?.trafficUnitPrice ?? 0,
             nextTrafficBillingAt: selectedPlan?.trafficBillingMode === 'usage' ? new Date(Date.now() + 60 * 60 * 1000) : null,

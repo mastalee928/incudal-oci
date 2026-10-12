@@ -948,6 +948,21 @@ export interface HostPoolInventoryRow {
   total: number
   idle: number
 }
+/** 没设规格的单租户机器：不属于任何池子，定价页要亮出来并就地补规格 */
+export interface HostPoolUnspecifiedHost {
+  id: number
+  name: string
+  architecture: string
+  machineGroupId: number | null
+  regionGroupId: number | null
+  machineGroup: string | null
+  regionGroup: string | null
+}
+export interface UpdateHostSpecRequest {
+  hostIds: number[]
+  resourcePreset: ResourcePreset
+  customerDiskGiB: number
+}
 
 export interface Host {
   id: number

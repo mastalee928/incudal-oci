@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
-import { OnboardingError, isOnboardingPublicIPv4 } from '../lib/host-onboarding.js'
+import { OnboardingError, isOnboardingPublicIPv4, RESOURCE_PRESETS, type ResourcePreset } from '../lib/host-onboarding.js'
+import { presetQuota } from '../lib/onboarding-resources.js'
 import { portProtocolSelect, portProtocolView } from '../services/host-port-protocol.js'
 import { lockHostGroups, resolveHostGroups, type HostGroupInput } from '../services/host-groups.js'
 import { HOST_OCCUPIED_INSTANCE_WHERE } from '../lib/host-resource-usage.js'
@@ -128,6 +129,53 @@ export default async function hostInventoryRoutes(fastify: FastifyInstance) {
       })
       if (updated === null) return reply.code(404).send({ code: 'HOST_NOT_FOUND' })
       await createLog(request.user.id, 'host', 'host.groups.update', 'Updated groups for host IDs ' + ids.join(', '), 'success')
+      return { success: true, updated }
+    } catch (error) {
+      if (error instanceof OnboardingError) return reply.code(400).send({ code: error.code })
+      throw error
+    }
+  })
+
+  /**
+   * 给已接入的机器补设规格：机型/核心预设 + 客户磁盘档。
+   * CPU 与内存配额按预设自动算，与接入时的口径完全一致；这是机器进入池子（可定价、可售）的前提。
+   * 接入前就能选，接入后一直没地方改——这个接口补上这个缺口。
+   */
+  fastify.patch<{ Body: { hostIds: number[]; resourcePreset: ResourcePreset; customerDiskGiB: number } }>('/inventory/spec', {
+    onRequest: [fastify.authenticateAdmin], config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    schema: { body: { type: 'object', additionalProperties: false, required: ['hostIds', 'resourcePreset', 'customerDiskGiB'], properties: {
+      hostIds: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: { type: 'integer', minimum: 1 } },
+      resourcePreset: { type: 'string', enum: [...RESOURCE_PRESETS] },
+      customerDiskGiB: { type: 'integer', minimum: 10, maximum: 10000 }
+    } } }
+  }, async (request, reply) => {
+    const { hostIds, resourcePreset, customerDiskGiB } = request.body
+    const quota = presetQuota(resourcePreset)
+    const expectedArchitecture = resourcePreset === 'E2' ? 'x86_64' : 'aarch64'
+    try {
+      const updated = await prisma.$transaction(async tx => {
+        const hosts = await tx.host.findMany({ where: { id: { in: hostIds } }, select: {
+          id: true, architecture: true, instances: { where: occupied, select: { cpu: true, memory: true, disk: true } }
+        } })
+        if (hosts.length !== hostIds.length) return null
+        for (const host of hosts) {
+          if (host.architecture !== expectedArchitecture) throw new OnboardingError('RESOURCE_ARCHITECTURE_MISMATCH')
+          // 已有实例不能超出新配额：否则单租户触发器会在下一次改动实例时拦住，留下半套状态
+          if (host.instances.some(i => i.cpu > quota.cpuAllowanceMax || i.memory > quota.memoryMax || i.disk > customerDiskGiB * 1024)) {
+            throw new OnboardingError('HOST_SPEC_INSTANCE_EXCEEDS')
+          }
+          await tx.host.update({ where: { id: host.id }, data: {
+            resourcePreset, customerDiskGiB, cpuAllowanceMax: quota.cpuAllowanceMax, memoryMax: quota.memoryMax,
+            // 一机一卖的库存单位：最多一个客户实例的机器才标成单租户
+            ...(host.instances.length <= 1 ? { singleTenant: true } : {})
+          } })
+          await tx.hostOnboardingNode.updateMany({ where: { hostId: host.id }, data: { resourcePreset, customerDiskGiB } })
+        }
+        return hosts.length
+      })
+      if (updated === null) return reply.code(404).send({ code: 'HOST_NOT_FOUND' })
+      await createLog(request.user.id, 'host', 'host.spec.update',
+        `Set spec ${resourcePreset} / ${customerDiskGiB} GiB for host IDs ${hostIds.join(', ')}`, 'success')
       return { success: true, updated }
     } catch (error) {
       if (error instanceof OnboardingError) return reply.code(400).send({ code: error.code })

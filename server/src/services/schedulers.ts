@@ -148,8 +148,13 @@ export async function startSchedulers(): Promise<void> {
         }
         console.log(`[CreateTimeout] 实例 ${instance.name} 资源已回滚`)
 
+        // 池子实例：退款后自动删除失败实例、机器进维护、通知管理员；多台订单改发批次汇总
+        const { handlePoolProvisionFailure, multiInstanceBatchOf } = await import('./pool-provision-failure.js')
+        await handlePoolProvisionFailure(instance.id, '创建超过 10 分钟未完成').catch(err => console.error('[CreateTimeout] 池子失败收尾出错:', err))
+        const timeoutMultiBatchId = await multiInstanceBatchOf(instance.id)
+
         // 发送用户通知
-        try {
+        if (!timeoutMultiBatchId) try {
           const { sendNotification } = await import('../lib/notifier.js')
           await sendNotification(instance.user_id, 'instance_create_timeout', {
             instanceName: instance.name,

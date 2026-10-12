@@ -25,6 +25,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useConfigStore } from '@/stores/config'
 import { storeToRefs } from 'pinia'
 import { useInstanceResourcesStore } from '@/stores/instanceResources'
+import { useCartStore } from '@/stores/cart'
 import RegionSelector from '@/components/instance/RegionSelector.vue'
 import type { Region } from '@/components/instance/RegionSelector.vue'
 import PackageSelector from '@/components/instance/PackageSelector.vue'
@@ -41,6 +42,7 @@ import GeneratedSshKeyModal from '@/components/GeneratedSshKeyModal.vue'
 import type { Package, UserQuota, AvailableHost, CreateInstanceRequest } from '@/types/api'
 import {
   architectureOfPreset,
+  buildPoolInstanceNames,
   formatMemoryMiB,
   formatPublicPrice,
   normalizePackageSourceQuery,
@@ -161,6 +163,19 @@ const poolProduct = ref<PoolCatalogProduct | null>(null)
 const poolRegion = ref<PoolCatalogRegion | null>(null)
 const poolNotFound = ref<boolean>(false)
 const isPoolMode = computed<boolean>(() => poolPriceId.value !== null)
+
+// 多台购买：数量上限取「该档位可售台数」与后台「整单上限」的较小者；
+// 名字多台时用「前缀-01」自动编号，与服务端规则一致。
+const cartStore = useCartStore()
+const poolQuantity = ref<number>(1)
+const poolMaxQuantity = computed<number>(() => Math.max(1, Math.min(poolProduct.value?.idle ?? 1, configStore.poolOrderMaxInstances)))
+const poolNames = computed<string[]>(() => buildPoolInstanceNames(form.value.name.trim(), poolQuantity.value))
+const poolUnitCents = computed<number>(() => (poolProduct.value ? poolProduct.value.monthlyPrice + poolProduct.value.setupFee : 0))
+const poolTotalCents = computed<number>(() => poolUnitCents.value * poolQuantity.value)
+watch([poolQuantity, poolMaxQuantity], ([quantity, max]) => {
+  const clamped = Math.min(Math.max(1, Math.floor(quantity || 1)), max)
+  if (clamped !== quantity) poolQuantity.value = clamped
+})
 
 // 表单数据
 interface InstanceForm {
@@ -408,6 +423,8 @@ const canSubmit = computed<boolean>(() => {
   if (isPoolMode.value) {
     return !!poolProduct.value &&
            poolProduct.value.idle > 0 &&
+           poolQuantity.value >= 1 &&
+           poolQuantity.value <= poolMaxQuantity.value &&
            !!form.value.name &&
            !!form.value.image &&
            availableImages.value.length > 0 &&
@@ -1223,14 +1240,19 @@ async function submitInstance(): Promise<boolean> {
         throw new Error(poolNameValidation.message)
       }
 
-      // 只给 poolPriceId：套餐、方案、机器、资源全部由服务端按池子解析，客户端不传也不该传。
-      await api.instances.create({
-        name: form.value.name,
-        poolPriceId: poolProduct.value.id,
-        image: form.value.image,
+      // 「直接付款」= 只有一行的订单。套餐、方案、机器、资源全部由服务端按池子解析，
+      // 服务端按当前价重算并与 expectedTotal 比对，拦住「页面停留太久价格已变」。
+      await api.instances.poolOrder({
+        items: [{
+          poolPriceId: poolProduct.value.id,
+          quantity: poolQuantity.value,
+          namePrefix: form.value.name.trim(),
+          image: form.value.image,
+          customInitCommandIds: form.value.customInitCommandIds.length > 0 ? form.value.customInitCommandIds : undefined
+        }],
         sshKeyId: form.value.sshKeyId,
-        customInitCommandIds: form.value.customInitCommandIds.length > 0 ? form.value.customInitCommandIds : undefined
-      } as unknown as CreateInstanceRequest)
+        expectedTotal: poolTotalCents.value
+      })
 
       toast.success(t('instance.createPage.createSuccess'))
       router.push('/instances')
@@ -1281,6 +1303,40 @@ async function handleSubmit(): Promise<void> {
   }
 
   await submitInstance()
+}
+
+/**
+ * 加入购物车：把这一台配置完整地存起来，回购买页继续挑；不占库存、不锁价。
+ */
+function addToCart(): void {
+  if (!isPoolMode.value || !poolProduct.value || !poolRegion.value || !form.value.image) return
+  const nameValidation = validateInstanceName(form.value.name)
+  if (!nameValidation.valid) {
+    error.value = nameValidation.message || ''
+    return
+  }
+  const imageLabel = availableImages.value.find(img => img.value === form.value.image)?.label || form.value.image
+  cartStore.add({
+    poolPriceId: poolProduct.value.id,
+    quantity: poolQuantity.value,
+    namePrefix: form.value.name.trim(),
+    image: form.value.image,
+    customInitCommandIds: [...form.value.customInitCommandIds],
+    snapshot: {
+      regionId: poolRegion.value.id,
+      regionName: poolRegion.value.name,
+      countryCode: poolRegion.value.countryCode,
+      resourcePreset: poolProduct.value.resourcePreset,
+      diskGiB: poolProduct.value.diskGiB,
+      cpu: poolProduct.value.cpu,
+      memoryMiB: poolProduct.value.memoryMiB,
+      monthlyPrice: poolProduct.value.monthlyPrice,
+      setupFee: poolProduct.value.setupFee,
+      imageLabel
+    }
+  })
+  toast.success(t('instance.createPage.pool.addedToCart'))
+  router.push('/market')
 }
 
 async function confirmSshKeyGeneration(): Promise<void> {
@@ -1541,17 +1597,24 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
                   <dd class="text-themed">{{ poolProduct.diskGiB }} GiB</dd>
                 </div>
                 <div class="flex justify-between gap-3">
+                  <dt class="text-themed-muted">{{ $t('instance.createPage.pool.quantity') }}</dt>
+                  <dd class="text-themed">× {{ poolQuantity }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
                   <dt class="text-themed-muted">{{ $t('instance.createPage.pool.monthly') }}</dt>
-                  <dd class="text-themed">¥{{ formatPublicPrice(poolProduct.monthlyPrice) }}</dd>
+                  <dd class="text-themed">¥{{ formatPublicPrice(poolProduct.monthlyPrice) }}<span v-if="poolQuantity > 1" class="text-themed-muted"> × {{ poolQuantity }}</span></dd>
                 </div>
                 <div class="flex justify-between gap-3">
                   <dt class="text-themed-muted">{{ $t('instance.createPage.pool.setupFee') }}</dt>
-                  <dd class="text-themed">{{ poolProduct.setupFee > 0 ? `¥${formatPublicPrice(poolProduct.setupFee)}` : $t('instance.createPage.pool.none') }}</dd>
+                  <dd class="text-themed">
+                    <template v-if="poolProduct.setupFee > 0">¥{{ formatPublicPrice(poolProduct.setupFee) }}<span v-if="poolQuantity > 1" class="text-themed-muted"> × {{ poolQuantity }}</span></template>
+                    <template v-else>{{ $t('instance.createPage.pool.none') }}</template>
+                  </dd>
                 </div>
               </dl>
               <div class="mt-4 pt-4 border-t border-themed flex items-center justify-between">
                 <span class="text-sm font-medium text-themed">{{ $t('instance.createPage.pool.total') }}</span>
-                <span class="text-2xl font-bold text-themed">¥{{ formatPublicPrice(poolProduct.monthlyPrice + poolProduct.setupFee) }}</span>
+                <span class="text-2xl font-bold text-themed">¥{{ formatPublicPrice(poolTotalCents) }}</span>
               </div>
               <p class="mt-3 text-xs text-themed-muted leading-relaxed">{{ $t('instance.createPage.pool.notice') }}</p>
             </div>
@@ -1669,7 +1732,7 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
           <!-- 吸底提交区 -->
           <div class="card p-4 mt-4 space-y-3">
             <div>
-              <label class="block text-sm text-themed-secondary mb-1.5">{{ $t('instance.createPage.instanceName') }}</label>
+              <label class="block text-sm text-themed-secondary mb-1.5">{{ isPoolMode && poolQuantity > 1 ? $t('instance.createPage.pool.namePrefix') : $t('instance.createPage.instanceName') }}</label>
               <p v-if="showDestroyTrafficNotice" class="mb-2 text-xs leading-relaxed flex items-start gap-1.5" :class="themeStore.isDark ? 'text-amber-300' : 'text-amber-700'">
                 <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 3a9 9 0 110 18 9 9 0 010-18z" />
@@ -1677,6 +1740,14 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
                 <span>{{ $t('instance.createPage.destroyTrafficNotice') }}</span>
               </p>
               <input v-model="form.name" type="text" class="input w-full" :placeholder="$t('instance.createPage.instanceNamePlaceholder')" required />
+              <p v-if="isPoolMode && poolQuantity > 1 && form.name" class="mt-1.5 text-xs text-themed-muted">
+                {{ $t('instance.createPage.pool.namePreview', { count: poolNames.length, names: poolNames.slice(0, 3).join(', ') }) }}
+              </p>
+            </div>
+            <div v-if="isPoolMode && poolProduct" class="flex items-center gap-3">
+              <label class="text-sm text-themed-secondary whitespace-nowrap">{{ $t('instance.createPage.pool.quantity') }}</label>
+              <input v-model.number="poolQuantity" type="number" min="1" :max="poolMaxQuantity" step="1" class="input w-24" />
+              <span class="text-xs text-themed-muted">{{ $t('instance.createPage.pool.quantityHint', { max: poolMaxQuantity }) }}</span>
             </div>
             <div v-if="sshKeys.length === 0" class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-500/30 rounded-lg">
               <p class="text-sm text-yellow-800 dark:text-yellow-300 font-medium mb-1">⚠️ {{ $t('instance.createPage.missingSshKey') }}</p>
@@ -1697,7 +1768,11 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
               <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-700'">{{ prerequisiteMessage }}</p>
             </div>
             <div v-if="error" class="p-3 rounded-lg border text-sm" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-700'">{{ error }}</div>
-            <button type="submit" :disabled="!canSubmit" class="btn-primary w-full">{{ submitting ? $t('instance.createPage.creating') : $t('instance.create') }}</button>
+            <div v-if="isPoolMode" class="flex gap-3">
+              <button type="button" :disabled="!canSubmit" class="btn-secondary flex-1" @click="addToCart">{{ $t('instance.createPage.pool.addToCart') }}</button>
+              <button type="submit" :disabled="!canSubmit" class="btn-primary flex-1">{{ submitting ? $t('instance.createPage.creating') : $t('instance.createPage.pool.payNow') }}</button>
+            </div>
+            <button v-else type="submit" :disabled="!canSubmit" class="btn-primary w-full">{{ submitting ? $t('instance.createPage.creating') : $t('instance.create') }}</button>
           </div>
         </div><!-- end right col -->
       </div><!-- end grid -->

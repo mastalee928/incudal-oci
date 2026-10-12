@@ -416,6 +416,7 @@ export interface Instance {
   user_id?: number  // Only for admin
   host_id?: number  // Only for admin
   package_id: number | null
+  poolPriceId?: number | null  // 一机一卖商品；非空时开通失败不可重试
   billingMode?: 'package' | 'hourly'
   displayOrder?: number
   display_order?: number

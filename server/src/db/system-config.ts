@@ -66,6 +66,7 @@ export async function initSystemConfig(): Promise<void> {
         { key: 'hosting_feature_enabled', value: 'true', type: 'boolean', label: '托管节点入口', description: '关闭后，仅对已经创建过节点的用户显示托管节点和收益入口' },
         { key: 'hosting_market_entry_enabled', value: 'true', type: 'boolean', label: '托管套餐购买入口', description: '控制开通实例页面是否显示托管专区和托管套餐购买入口' },
         { key: 'hosting_notice', value: '', type: 'string', label: '托管公告', description: '显示在托管收益页面的公告内容，留空则不显示' },
+        { key: 'pool_order_max_instances', value: '100', type: 'number', label: '一机一卖整单上限', description: '一次付款最多包含的机器台数（含购物车多行合计），超过则拒绝下单' },
         { key: 'aff_rebate_enabled', value: 'false', type: 'boolean', label: '允许 AFF 返利', description: '开启后，用户可以创建并使用 AFF 优惠码获得返利；关闭后禁止创建、校验和绑定 AFF 优惠码' },
         { key: 'ticket_enabled', value: 'true', type: 'boolean', label: '工单开关', description: '关闭后，普通用户无法发起工单，用户端隐藏工单入口' },
         { key: 'free_site_mode', value: 'false', type: 'boolean', label: '白嫖站', description: '开启后，用户端隐藏充值入口、充值记录和推荐计划' },

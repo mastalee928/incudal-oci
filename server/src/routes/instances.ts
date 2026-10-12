@@ -497,6 +497,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           displayOrder: true,
           iconBadgeId: true,
           packagePlanId: true,
+          poolPriceId: true,
           billingMode: true,
           billingPrice: true,
           monthlyTrafficLimit: true,
@@ -572,6 +573,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       displayOrder: i.displayOrder,
       iconBadgeId: i.iconBadgeId,
       packagePlanId: i.packagePlanId,
+      // 一机一卖商品：前端据此隐藏「重试开通」（失败已退款并自动删除，不在原机器重试）
+      poolPriceId: i.poolPriceId ?? null,
       billingMode: (i as any).billingMode || 'package',
       billingPrice: i.billingPrice ? Number(i.billingPrice) : null,
       monthlyTrafficLimit: i.monthlyTrafficLimit ? i.monthlyTrafficLimit.toString() : null,
@@ -1944,6 +1947,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     const ownerId = instance.userId
     if (instance.status !== 'error') {
       return reply.code(409).send({ error: '只有创建失败的实例可以重试', code: 'INSTANCE_NOT_RETRYABLE' })
+    }
+    // 一机一卖：失败已全额退款、实例随后自动删除、机器进维护，不在原机器上重试，客户直接重新下单。
+    if (instance.poolPriceId !== null) {
+      return reply.code(409).send(apiError(ErrorCode.POOL_INSTANCE_NOT_RETRYABLE))
     }
     if (instance.provisioningCleanupPending) {
       return reply.code(409).send({ error: '实例清理尚未完成，请稍后重试', code: 'INSTANCE_CLEANUP_PENDING' })

@@ -16,6 +16,7 @@ import {
 } from '../../lib/incus/index.js'
 import type { Host } from '../../types/database.js'
 import { cleanupAndSettleFailedProvision } from '../../services/provisioning-cleanup.js'
+import { handlePoolProvisionFailure, maybeSendPoolOrderSummary, multiInstanceBatchOf } from '../../services/pool-provision-failure.js'
 
 /**
  * 异步创建实例
@@ -195,8 +196,10 @@ export async function createInstanceAsync(
 
     const instance = await db.getInstanceById(instanceId)
     if (instance) {
+      // 多台订单不逐台通知，全部到达终态后只发一条批次汇总
+      const multiBatchId = await multiInstanceBatchOf(instanceId)
       const { sendNotification } = await import('../../lib/notifier.js')
-      await sendNotification(userId, 'instance_created', {
+      if (!multiBatchId) await sendNotification(userId, 'instance_created', {
         instanceName: instance.name,
         status: 'running',
         hostName: host.name,
@@ -210,7 +213,7 @@ export async function createInstanceAsync(
         ipv6: ipv6 || undefined
       })
 
-      try {
+      if (!multiBatchId) try {
         const { sendInstanceCreatedEmail } = await import('../../lib/mailer.js')
         const user = await db.findUserById(userId)
         if (user && user.email) {
@@ -254,6 +257,10 @@ export async function createInstanceAsync(
         'success',
         { instanceId }
       )
+
+      if (multiBatchId) {
+        await maybeSendPoolOrderSummary(multiBatchId).catch(err => console.error('[Provisioning] 批次汇总失败:', err))
+      }
     }
 
   } catch (error) {
@@ -315,9 +322,16 @@ export async function createInstanceAsync(
       console.log(`[Provisioning] 实例 ${instanceId} 已自动退款 ¥${cleanup.settlement.refundAmount.toFixed(2)}`)
     }
 
+    // 池子实例：退款到账后自动删除失败实例、机器进维护、通知管理员；多台订单改发批次汇总。
+    // 对旧模型实例是空操作。
+    if (cleanup.settlement?.claimed) {
+      await handlePoolProvisionFailure(instanceId, errorMessage).catch(err => console.error('[Provisioning] 池子失败收尾出错:', err))
+    }
+    const failedMultiBatchId = await multiInstanceBatchOf(instanceId)
+
     const instance = await db.getInstanceById(instanceId)
     if (instance) {
-      try {
+      if (!failedMultiBatchId) try {
         const { sendNotification } = await import('../../lib/notifier.js')
         await sendNotification(userId, 'instance_create_failed', {
           instanceName: instance.name,

@@ -255,14 +255,23 @@ export async function updateExpiryNotifiedAt(instanceId: number): Promise<void> 
 }
 
 /**
- * 获取需要自动续费的实例
- * @param hoursBeforeExpiry 到期前多少小时
+ * 获取需要自动续费的实例。
+ *
+ * 候选包含「已到期但仍在宽限期内」的实例。原来的条件要求 `expiresAt > now`，
+ * 于是面板若在到期前的续费窗口里停机，这批实例永远不会被自动续费——客户余额充足、
+ * 自动续费开着，机器照样到期停机直至销毁。放宽后，面板恢复的下一次 tick 会把它们补上。
+ * `performRenewal` 本身已支持「到期封停」的实例，续费成功会把状态恢复为 stopped。
+ *
+ * @param hoursBeforeExpiry 到期前多少小时开始尝试
+ * @param graceHours 到期后仍允许补救的小时数，与销毁宽限期一致
  */
 export async function getAutoRenewInstances(
-  hoursBeforeExpiry: number
+  hoursBeforeExpiry: number,
+  graceHours = 72
 ): Promise<Instance[]> {
   const now = new Date()
   const expiryThreshold = new Date(now.getTime() + hoursBeforeExpiry * 60 * 60 * 1000)
+  const graceThreshold = new Date(now.getTime() - graceHours * 60 * 60 * 1000)
 
   return prisma.instance.findMany({
     where: {
@@ -270,9 +279,14 @@ export async function getAutoRenewInstances(
       expiresAt: {
         not: null,
         lte: expiryThreshold,
-        gt: now // 还未到期
+        gte: graceThreshold // 不复活早已过期的历史实例
       },
-      status: { in: ['running', 'stopped'] } // 只处理已完成开通的实例
+      // 已完成开通的实例，外加「到期封停」——后者正是面板漏跑时要救回来的那一批。
+      // 手动封停不在其中。
+      OR: [
+        { status: { in: ['running', 'stopped'] } },
+        { status: 'suspended', suspendReason: 'expired' }
+      ]
     }
   })
 }
@@ -309,11 +323,13 @@ export async function resetAutoRenewAttempts(instanceId: number): Promise<void> 
 }
 
 /**
- * 获取封停超过指定天数的实例（用于自动删除）
+ * 获取已过宽限期的到期实例（用于自动销毁）。
+ *
+ * 锚定 `expiresAt` 而不是 `suspendedAt`：停机任务每 30 分钟跑一次，若以停机时刻起算，
+ * 实际宽限会被拉长到 72–96 小时。以到期时刻起算并高频调度，误差只晚不早。
  */
-export async function getSuspendedInstancesOlderThan(days: number): Promise<Instance[]> {
-  const threshold = new Date()
-  threshold.setDate(threshold.getDate() - days)
+export async function getExpiredPastGraceInstances(graceHours: number): Promise<Instance[]> {
+  const threshold = new Date(Date.now() - graceHours * 60 * 60 * 1000)
 
   return prisma.instance.findMany({
     where: {
@@ -321,10 +337,7 @@ export async function getSuspendedInstancesOlderThan(days: number): Promise<Inst
       // 纳入查询可以恢复进程崩溃或外部删除失败后的清理。
       status: { in: ['suspended', 'deleted'] },
       suspendReason: 'expired',
-      suspendedAt: {
-        not: null,
-        lt: threshold
-      }
+      expiresAt: { not: null, lt: threshold }
     }
   })
 }

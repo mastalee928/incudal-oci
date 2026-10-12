@@ -132,7 +132,7 @@ export {
   getAutoRenewInstances,
   updateAutoRenewAttempt,
   resetAutoRenewAttempts,
-  getSuspendedInstancesOlderThan
+  getExpiredPastGraceInstances
 } from './instance-suspend.js'
 
 // 导出计费业务操作（排除与 package-plans.js 冲突的 calculateMonthlyPrice）

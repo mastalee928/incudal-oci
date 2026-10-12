@@ -16,10 +16,7 @@ const hiddenHostingRouteNames = new Set([
   'my-host-detail',
   'my-packages',
   'my-package-detail',
-  'my-package-create',
   'my-package-edit',
-  'my-package-plan-create',
-  'my-package-plan-edit',
   'hosting-wallet'
 ])
 
@@ -212,29 +209,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/resources/MyPackagesView.vue'),
     meta: { requiresAuth: true, titleKey: 'nav.myPackages', title: '我的套餐' }
   },
-  {
-    path: '/resources/packages/create',
-    name: 'my-package-create',
-    component: () => import('@/views/resources/PackageFormView.vue'),
-    meta: { requiresAuth: true, titleKey: 'nav.myPackageCreate', title: '创建套餐' }
-  },
+  // 一机一卖：「创建套餐」与「方案」两张表单已整块撤下——池子定价表保存时自动生成影子套餐与方案。
+  // 套餐详情页保留只读入口（站内信里仍有指向它的链接）。
   {
     path: '/resources/packages/:id',
     name: 'my-package-detail',
     component: () => import('@/views/resources/MyPackageDetailView.vue'),
     meta: { requiresAuth: true, titleKey: 'nav.myPackageDetail', title: '套餐详情' }
-  },
-  {
-    path: '/resources/packages/:id/plans/create',
-    name: 'my-package-plan-create',
-    component: () => import('@/views/resources/PackagePlanFormView.vue'),
-    meta: { requiresAuth: true, titleKey: 'nav.myPackagePlanCreate', title: '创建方案' }
-  },
-  {
-    path: '/resources/packages/:id/plans/:planId/edit',
-    name: 'my-package-plan-edit',
-    component: () => import('@/views/resources/PackagePlanFormView.vue'),
-    meta: { requiresAuth: true, titleKey: 'nav.myPackagePlanEdit', title: '编辑方案' }
   },
   {
     path: '/resources/packages/:id/edit',
@@ -285,6 +266,12 @@ const routes: RouteRecordRaw[] = [
     name: 'admin-host-onboarding',
     component: () => import('@/views/admin/HostOnboardingView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'onboarding.title', title: '批量接入' }
+  },
+  {
+    path: '/admin/host-pools',
+    name: 'admin-host-pools',
+    component: () => import('@/views/admin/HostPoolPricingView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'hostPools.title', title: '池子定价' }
   },
   {
     path: '/admin/statistics',

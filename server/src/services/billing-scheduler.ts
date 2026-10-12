@@ -21,7 +21,7 @@ import {
 import {
   getAutoRenewInstances,
   getExpiredUnsuspendedInstances,
-  getSuspendedInstancesOlderThan,
+  getExpiredPastGraceInstances,
   suspendInstanceByExpiry,
   claimExpiredInstanceForDeletion,
   restoreExpiredInstanceDeletionClaim,
@@ -38,8 +38,14 @@ const limit = pLimit(5)
 // 配置常量
 const AUTO_RENEW_HOURS_BEFORE = 24 // 到期前24小时尝试自动续费
 const AUTO_RENEW_MAX_ATTEMPTS = 3 // 最大自动续费尝试次数
-const SUSPEND_AFTER_DELETE_DAYS = 3 // 封停后3天自动删除
-const EXPIRY_NOTIFY_DAYS = [3] // 仅在到期前3天提醒一次
+// 宽限期锚定「到期时刻」：72 小时。删除任务每 15 分钟跑一次，误差只晚不早（≤15 分钟）。
+// 若以停机时刻起算，停机任务自身 0–30 分钟的延迟会把实际宽限拉到 72–96 小时。
+const EXPIRY_GRACE_HOURS = 72
+// 到期前 48 / 24 / 12 小时各提醒一次。窗口 ±1 小时、去重 2 小时：
+// 三个时点相隔 ≥12 小时，互不压制；同一时点只发一次。
+const EXPIRY_NOTIFY_HOURS = [48, 24, 12]
+const EXPIRY_NOTIFY_WINDOW_HOURS = 1
+const EXPIRY_NOTIFY_DEDUPE_HOURS = 2
 
 /**
  * 延迟函数
@@ -341,11 +347,8 @@ async function executeExpiryDelete(): Promise<void> {
   const startTime = Date.now()
 
   try {
-    // 获取封停超过3天的实例（仅限到期封停的）
-    const instances = await getSuspendedInstancesOlderThan(SUSPEND_AFTER_DELETE_DAYS)
-
-    // 过滤出到期封停的（非手动封停）
-    const expiredInstances = instances.filter(i => i.suspendReason === 'expired')
+    // 获取已过 72 小时宽限期的到期实例（查询本身已限定 suspendReason = expired）
+    const expiredInstances = await getExpiredPastGraceInstances(EXPIRY_GRACE_HOURS)
 
     console.log(`[Billing] Found ${expiredInstances.length} expired instances to delete`)
 
@@ -434,7 +437,7 @@ async function processExpiryDelete(instance: any): Promise<void> {
       claimed.userId,
       'instance',
       'instance.deleted_expired',
-      `Instance "${claimed.name}" automatically deleted after ${SUSPEND_AFTER_DELETE_DAYS} days of suspension`,
+      `Instance "${claimed.name}" automatically deleted after ${EXPIRY_GRACE_HOURS} hours past expiry`,
       'success'
     )
 
@@ -474,9 +477,9 @@ async function executeExpiryNotify(): Promise<void> {
   const startTime = Date.now()
 
   try {
-    // 对每个提醒时间点检查（天数）
-    for (const days of EXPIRY_NOTIFY_DAYS) {
-      await notifyExpiringInstances(days)
+    // 对每个提醒时点检查（小时）
+    for (const hours of EXPIRY_NOTIFY_HOURS) {
+      await notifyExpiringInstances(hours)
     }
 
     const duration = Date.now() - startTime
@@ -487,13 +490,14 @@ async function executeExpiryNotify(): Promise<void> {
 }
 
 /**
- * 通知指定天数内到期的实例（发送邮件）
+ * 通知指定小时数内到期的实例（站内信 + 邮件）
  */
-async function notifyExpiringInstances(days: number): Promise<void> {
+async function notifyExpiringInstances(hours: number): Promise<void> {
   const now = new Date()
-  // 计算天数范围（前后12小时窗口）
-  const minThreshold = new Date(now.getTime() + (days * 24 - 12) * 60 * 60 * 1000)
-  const maxThreshold = new Date(now.getTime() + (days * 24 + 12) * 60 * 60 * 1000)
+  // 计算小时范围（前后 1 小时窗口）。任务每小时跑一次，窗口内只会命中一到两次，
+  // 再由下面的去重压到一次。
+  const minThreshold = new Date(now.getTime() + (hours - EXPIRY_NOTIFY_WINDOW_HOURS) * 60 * 60 * 1000)
+  const maxThreshold = new Date(now.getTime() + (hours + EXPIRY_NOTIFY_WINDOW_HOURS) * 60 * 60 * 1000)
 
   // 查询在指定时间窗口内到期的实例
   const instances = await prisma.instance.findMany({
@@ -504,10 +508,11 @@ async function notifyExpiringInstances(days: number): Promise<void> {
       },
       autoRenew: false,
       status: { notIn: ['suspended', 'deleted'] },
-      // 在过去24小时内没有发送过通知
+      // 去重窗口必须短于两个提醒时点的间隔（最短 12 小时），
+      // 否则后两个时点会被前一个压掉，客户只会收到一次提醒
       OR: [
         { expiryNotifiedAt: null },
-        { expiryNotifiedAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } }
+        { expiryNotifiedAt: { lt: new Date(now.getTime() - EXPIRY_NOTIFY_DEDUPE_HOURS * 60 * 60 * 1000) } }
       ]
     },
     include: {
@@ -517,19 +522,19 @@ async function notifyExpiringInstances(days: number): Promise<void> {
     }
   })
 
-  console.log(`[Billing] Found ${instances.length} instances expiring in ${days} days`)
+  console.log(`[Billing] Found ${instances.length} instances expiring in ${hours} hours`)
 
   // 并发发送邮件通知
   await Promise.all(
     instances.map(instance =>
       limit(async () => {
         try {
-          const daysRemaining = days
+          const hoursRemaining = hours
 
           // 发送站内通知
           await sendNotification(instance.userId, 'instance_expiring', {
             instanceName: instance.name,
-            daysRemaining,
+            hoursRemaining,
             newExpiresAt: instance.expiresAt?.toISOString()
           })
 
@@ -539,7 +544,7 @@ async function notifyExpiringInstances(days: number): Promise<void> {
               await sendExpiryReminderEmail(instance.user.email, {
                 username: instance.user.username,
                 instanceName: instance.name,
-                daysRemaining,
+                hoursRemaining,
                 expiresAt: instance.expiresAt!
               })
             } catch (emailErr) {
@@ -680,7 +685,7 @@ export function startBillingScheduler(): void {
   })
 
   // 每天凌暨3点检查到期删除
-  schedule('0 3 * * *', () => {
+  schedule('*/15 * * * *', () => {
     executeExpiryDelete().catch(console.error)
   })
 
@@ -707,8 +712,8 @@ export function startBillingScheduler(): void {
   console.log('[Billing] Scheduler started')
   console.log('[Billing] - Auto-renew: hourly at :00 (24h before expiry, max 3 attempts)')
   console.log('[Billing] - Expiry suspend: every 30 minutes')
-  console.log('[Billing] - Expiry delete: daily at 03:00 (3 days after suspend)')
-  console.log('[Billing] - Expiry notify (email): hourly at :15 (3 days before, auto-renew instances skipped)')
+  console.log(`[Billing] - Expiry delete: every 15 minutes (${EXPIRY_GRACE_HOURS}h past expiry)`)
+  console.log(`[Billing] - Expiry notify (email): hourly at :15 (${EXPIRY_NOTIFY_HOURS.join('/')}h before, auto-renew instances skipped)`)
   console.log('[Billing] - Expired recharge cleanup: hourly at :30')
   console.log('[Billing] - Payment callback cleanup: daily at 04:30')
   console.log('[Billing] - Temporary data cleanup: daily at 05:00')

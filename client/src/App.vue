@@ -19,7 +19,6 @@ const hiddenHostingRouteNames = new Set([
   'my-host-create',
   'my-host-detail',
   'my-packages',
-  'my-package-create',
   'my-package-edit',
   'hosting-wallet'
 ])

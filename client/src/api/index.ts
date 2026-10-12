@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import type { HostPortProtocolState, PortProtocol, PortProtocolState } from '@/types/api'
-import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest, HostMachineGroup, HostRegionGroup } from '@/types/api'
+import type { CreateOnboardingRequest, OnboardingCredentials, OnboardingListResponse, OnboardingGatewayStatus, HostInventoryResponse, HostInventoryQuery, UpdateHostGroupsRequest, HostMachineGroup, HostRegionGroup, HostPoolPrice, HostPoolPriceInput, HostPoolInventoryRow } from '@/types/api'
 
 // Keep bearer tokens in memory only. Session restoration uses the HttpOnly
 // refresh-token cookie, so XSS cannot recover a persisted access token.
@@ -1348,6 +1348,16 @@ const api = {
     cancel: (id: string): Promise<{ success: boolean }> => http.post(`/host-onboarding/nodes/${id}/cancel`),
     deleteTask: (id: string): Promise<{ success: boolean }> => http.delete(`/host-onboarding/nodes/${id}`)
   },
+  hostPools: {
+    // 池子定价表。resourcePreset 用 string 而不是 ResourcePreset：服务端有 enum 校验，
+    // 这里不引入额外的类型导入依赖。
+    prices: (params: { machineGroupId?: number; resourcePreset?: string } = {}): Promise<{ prices: HostPoolPrice[] }> =>
+      http.get('/host-pools/prices', { params }),
+    savePrices: (items: HostPoolPriceInput[]): Promise<{ saved: number; ids: number[] }> =>
+      http.post('/host-pools/prices/batch', { items }),
+    deletePrice: (id: number): Promise<{ success: boolean }> => http.delete(`/host-pools/prices/${id}`),
+    inventory: (): Promise<{ pools: HostPoolInventoryRow[] }> => http.get('/host-pools/inventory')
+  },
   hosts: {
     getPortProtocol: (id: number): Promise<HostPortProtocolState> => http.get(`/hosts/${id}/port-protocol`),
     setPortProtocol: (id: number, protocol: PortProtocol): Promise<PortProtocolState> => http.patch(`/hosts/${id}/port-protocol`, { protocol }),
@@ -1952,6 +1962,27 @@ const api = {
       const queryString = params.toString()
       return http.get(queryString ? `/packages/public/regions?${queryString}` : '/packages/public/regions')
     },
+    /**
+     * 一机一卖的公开商品目录（未登录可访问）。
+     * 按「洲 → 城市 → 机型/核心 → 磁盘档」浏览；库存与分配器同一套就绪判据，
+     * 所以页面显示有货就一定挑得到机器。没有定价行的池子不会出现在这里。
+     */
+    getPublicCatalog: (): Promise<{ regions: Array<{
+      id: number
+      name: string
+      countryCode: string | null
+      products: Array<{
+        id: number
+        resourcePreset: string
+        diskGiB: number
+        monthlyPrice: number
+        setupFee: number
+        cpu: number
+        memoryMiB: number
+        idle: number
+        total: number
+      }>
+    }> }> => http.get('/packages/public/catalog'),
     // 需要登录的 API
     list: (options?: { all?: boolean; source?: 'official' | 'market' | 'friends' | 'zone'; zoneId?: number; scope?: 'mine' | 'official' | 'hosted' }): Promise<{ packages: Package[]; total: number }> => {
       const params = new URLSearchParams()

@@ -1858,7 +1858,10 @@ export async function sendExpiryReminderEmail(
     data: {
         username: string
         instanceName: string
-        daysRemaining: number
+        /** 剩余小时数。到期提醒按 48/24/12 小时三个时点发送，用小时比「天」准确。 */
+        hoursRemaining?: number
+        /** 兼容只传天数的旧调用方。 */
+        daysRemaining?: number
         expiresAt: Date
     }
 ): Promise<{ success: boolean; error?: string }> {
@@ -1872,10 +1875,11 @@ export async function sendExpiryReminderEmail(
         const { config, brandName, brandLogoUrl } = await getMailContext()
 
         const expiresAtStr = formatDate(data.expiresAt)
-        const alertType = data.daysRemaining <= 1 ? 'danger' : 'warning'
-        const urgencyText = data.daysRemaining <= 1 
-            ? '紧急！您的实例即将到期' 
-            : `您的实例将在 ${data.daysRemaining} 天后到期`
+        const hoursRemaining = data.hoursRemaining ?? (data.daysRemaining ?? 0) * 24
+        const alertType = hoursRemaining <= 24 ? 'danger' : 'warning'
+        const urgencyText = hoursRemaining <= 24
+            ? '紧急！您的实例即将到期'
+            : `您的实例将在 ${hoursRemaining} 小时后到期`
 
         const htmlContent = generateEmailHtml({
             title: '实例到期提醒',
@@ -1886,13 +1890,13 @@ export async function sendExpiryReminderEmail(
             paragraphs: [
                 '为避免实例被封停，请及时续费。',
                 '',
-                '实例到期后将被封停，封停 3 天后将被永久删除，数据无法恢复。'
+                '实例到期后将被封停，封停 72 小时后将被永久删除，数据无法恢复。'
             ],
             infoTitle: '实例详情',
             infoItems: [
                 { label: '实例名称', value: data.instanceName },
                 { label: '到期时间', value: expiresAtStr },
-                { label: '剩余天数', value: `${data.daysRemaining} 天` }
+                { label: '剩余时间', value: `${hoursRemaining} 小时` }
             ],
             actionTip: `请登录 ${brandName} 控制面板进行续费操作。`,
             brandName,
@@ -1907,13 +1911,13 @@ export async function sendExpiryReminderEmail(
             paragraphs: [
                 '为避免实例被封停，请及时续费。',
                 '',
-                '实例到期后将被封停，封停 3 天后将被永久删除，数据无法恢复。'
+                '实例到期后将被封停，封停 72 小时后将被永久删除，数据无法恢复。'
             ],
             infoTitle: '实例详情',
             infoItems: [
                 { label: '实例名称', value: data.instanceName },
                 { label: '到期时间', value: expiresAtStr },
-                { label: '剩余天数', value: `${data.daysRemaining} 天` }
+                { label: '剩余时间', value: `${hoursRemaining} 小时` }
             ],
             actionTip: `请登录 ${brandName} 控制面板进行续费操作。`,
             brandName,
@@ -1923,7 +1927,7 @@ export async function sendExpiryReminderEmail(
         await transporter.sendMail({
             from: config.fromName ? `"${config.fromName}" <${config.fromEmail}>` : config.fromEmail,
             to: email,
-            subject: formatBrandSubject(brandName, `实例「${data.instanceName}」将在 ${data.daysRemaining} 天后到期`),
+            subject: formatBrandSubject(brandName, `实例「${data.instanceName}」将在 ${hoursRemaining} 小时后到期`),
             text: textContent,
             html: htmlContent
         })

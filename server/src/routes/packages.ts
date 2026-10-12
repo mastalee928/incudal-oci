@@ -16,6 +16,9 @@ import { normalizeTrafficMultiplier } from '../lib/traffic-multiplier.js'
 import { calculateAllocatedHostResources, HOST_RESOURCE_INSTANCE_STATUSES } from '../lib/host-resource-usage.js'
 import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
 import { isValidPlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+import { poolInventory } from '../services/host-pool-prices.js'
+import { presetQuota } from '../lib/onboarding-resources.js'
+import type { ResourcePreset } from '../lib/host-onboarding.js'
 
 const KVM_UNSUPPORTED_NETWORK_MODES = new Set(['nat_ipv6_nat', 'ipv6_nat'])
 const MAX_PACKAGE_PLAN_NAME_LENGTH = 50
@@ -506,7 +509,8 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     // 构建查询条件
     const where: any = {
       active: true,        // 只返回已启用的套餐
-      globalShared: true   // 只返回公开套餐
+      globalShared: true,  // 只返回公开套餐
+      hidden: false        // 影子套餐由池子定价自动生成，不对任何界面展示
     }
     
     // 根据 source 过滤
@@ -721,7 +725,8 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     // 构建查询条件
     const where: any = {
       active: true,
-      globalShared: true
+      globalShared: true,
+      hidden: false
     }
     
     if (source === 'official') {
@@ -798,6 +803,68 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     regions.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
     
     return { regions }
+  })
+
+  /**
+   * 公开获取池子商品目录（购买页用，未登录可访问）。
+   *
+   * 一机一卖下的购买入口：按「洲 → 城市 → 机型/核心 → 磁盘档」浏览。
+   * 洲由 countryCode 在客户端推导，所以这里只返回代码，不返回中文名。
+   * 库存用与分配器**同一套就绪判据**（readyOnly），避免「页面显示有货、下单挑不到机器」。
+   */
+  fastify.get('/public/catalog', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } }
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
+    const [prices, pools] = await Promise.all([
+      prisma.hostPoolPrice.findMany({
+        where: { active: true },
+        select: {
+          id: true, resourcePreset: true, diskGiB: true, monthlyPrice: true, setupFee: true,
+          regionGroup: { select: { id: true, name: true, countryCode: true } }
+        },
+        orderBy: [{ resourcePreset: 'asc' }, { diskGiB: 'asc' }, { id: 'asc' }]
+      }),
+      poolInventory({ readyOnly: true })
+    ])
+
+    interface CatalogProduct {
+      id: number
+      resourcePreset: string
+      diskGiB: number
+      monthlyPrice: number
+      setupFee: number
+      cpu: number
+      memoryMiB: number
+      idle: number
+      total: number
+    }
+    const byRegion = new Map<number, { id: number; name: string; countryCode: string | null; products: CatalogProduct[] }>()
+    for (const price of prices) {
+      const region = price.regionGroup
+      if (!region) continue
+      let entry = byRegion.get(region.id)
+      if (!entry) {
+        entry = { id: region.id, name: region.name, countryCode: region.countryCode, products: [] }
+        byRegion.set(region.id, entry)
+      }
+      const quota = presetQuota(price.resourcePreset as ResourcePreset)
+      const stock = pools.find(pool =>
+        pool.regionGroupId === region.id && pool.resourcePreset === price.resourcePreset && pool.diskGiB === price.diskGiB)
+      entry.products.push({
+        id: price.id,
+        resourcePreset: price.resourcePreset,
+        diskGiB: price.diskGiB,
+        monthlyPrice: Number(price.monthlyPrice),
+        setupFee: Number(price.setupFee),
+        cpu: quota.cpuAllowanceMax,
+        memoryMiB: quota.memoryMax,
+        idle: stock?.idle ?? 0,
+        total: stock?.total ?? 0
+      })
+    }
+
+    reply.header('Cache-Control', 'no-store')
+    return { regions: [...byRegion.values()] }
   })
 
   // ==================== 需要登录的 API ====================

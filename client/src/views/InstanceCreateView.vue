@@ -35,10 +35,22 @@ import ImageSelector from '@/components/instance/ImageSelector.vue'
 import SSHKeySelector from '@/components/instance/SSHKeySelector.vue'
 import InitCommandSelector from '@/components/extensions/InitCommandSelector.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
+import FlagIcon from '@/components/FlagIcon.vue'
 import SSHKeyGenerationPromptModal from '@/components/SSHKeyGenerationPromptModal.vue'
 import GeneratedSshKeyModal from '@/components/GeneratedSshKeyModal.vue'
 import type { Package, UserQuota, AvailableHost, CreateInstanceRequest } from '@/types/api'
-import { normalizePackageSourceQuery, toPackageSourceRequest, type PackageSource } from '@/utils/publicCatalog'
+import {
+  architectureOfPreset,
+  formatMemoryMiB,
+  formatPublicPrice,
+  normalizePackageSourceQuery,
+  parsePackageIdQuery,
+  presetLabel,
+  toPackageSourceRequest,
+  type PackageSource,
+  type PoolCatalogProduct,
+  type PoolCatalogRegion
+} from '@/utils/publicCatalog'
 import { validateName as validateInstanceName } from '@/utils/validation'
 import { translateError } from '@/utils/errorHandler'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
@@ -141,6 +153,14 @@ const showSshKeyGenerationPrompt = ref<boolean>(false)
 const sshKeyGenerating = ref<boolean>(false)
 const showGeneratedSshKeyModal = ref<boolean>(false)
 const generatedPrivateKey = ref<string>('')
+
+// 一机一卖：带 poolPriceId 进入时走池子模式——只选系统与凭据，机器由分配器按池子挑，
+// 套餐/方案/宿主机这三步都不存在。服务端会把 poolPriceId 解析成影子套餐与方案。
+const poolPriceId = ref<number | null>(parsePackageIdQuery(route.query.poolPriceId))
+const poolProduct = ref<PoolCatalogProduct | null>(null)
+const poolRegion = ref<PoolCatalogRegion | null>(null)
+const poolNotFound = ref<boolean>(false)
+const isPoolMode = computed<boolean>(() => poolPriceId.value !== null)
 
 // 表单数据
 interface InstanceForm {
@@ -385,6 +405,16 @@ const resourceLimitCheck = computed<QuotaCheckResult>(() => {
 })
 
 const canSubmit = computed<boolean>(() => {
+  if (isPoolMode.value) {
+    return !!poolProduct.value &&
+           poolProduct.value.idle > 0 &&
+           !!form.value.name &&
+           !!form.value.image &&
+           availableImages.value.length > 0 &&
+           (sshKeys.value.length === 0 || form.value.sshKeyId !== null) &&
+           !submitting.value
+  }
+
   // 售罄套餐不允许创建
   if (selectedPackage.value?.soldOut) {
     return false
@@ -485,8 +515,75 @@ const selectedHostingZone = computed<HostingZoneTab | null>(() => {
   return hostingZones.value.find(zone => zone.id === zoneId) || null
 })
 
+/**
+ * 池子模式：按 poolPriceId 从公开目录里找到商品，再按机型架构筛镜像。
+ * 目录接口未登录也可访问，复用它就不需要再为创建页加一个专门的查询接口。
+ */
+async function loadPoolProduct(): Promise<void> {
+  try {
+    const [, catalog] = await Promise.all([
+      resourcesStore.loadSshKeys(),
+      api.packages.getPublicCatalog()
+    ])
+
+    for (const region of catalog.regions || []) {
+      const product = region.products.find(item => item.id === poolPriceId.value)
+      if (product) {
+        poolProduct.value = product
+        poolRegion.value = region
+        break
+      }
+    }
+
+    if (!poolProduct.value) {
+      poolNotFound.value = true
+      return
+    }
+
+    if (sshKeys.value.length > 0) {
+      form.value.sshKeyId = sshKeys.value[0].id
+    }
+    await loadPoolImages(poolProduct.value)
+  } catch (err: any) {
+    error.value = t('instance.createPage.loadFailed') + ': ' + (err?.message || String(err))
+  } finally {
+    loading.value = false
+  }
+}
+
+/**
+ * 客户不能指定机器，所以镜像由机型决定：E2 只列 x86_64，ARM 只列 aarch64，且只列可见的。
+ * 内存传池子的配额，让 128MB 那条「只许 Alpine/Debian」的规则照常生效。
+ */
+async function loadPoolImages(product: PoolCatalogProduct): Promise<void> {
+  imagesLoading.value = true
+  try {
+    const architecture = architectureOfPreset(product.resourcePreset)
+    const res = await api.images.getSystemImages('container', product.memoryMiB)
+    const images = (res.images || [])
+      .filter(img => img.architecture === architecture)
+      .map(img => ({
+        value: img.remoteAlias,
+        label: img.name,
+        icon: img.icon || getDistroFromName(img.name)
+      }))
+    availableImages.value = images
+    form.value.image = images[0]?.value ?? ''
+  } catch (_err) {
+    availableImages.value = []
+    form.value.image = ''
+  } finally {
+    imagesLoading.value = false
+  }
+}
+
 onMounted(async (): Promise<void> => {
   await configStore.loadPublicConfig()
+
+  if (isPoolMode.value) {
+    await loadPoolProduct()
+    return
+  }
 
   try {
     // 分享链接中的托管区域必须在解析来源前加载完成，否则冷启动时会被误判为官方来源。
@@ -1117,6 +1214,29 @@ async function submitInstance(): Promise<boolean> {
   submitting.value = true
   
   try {
+    if (isPoolMode.value) {
+      if (!poolProduct.value) throw new Error(t('instance.createPage.pool.notFound'))
+      if (form.value.sshKeyId === null) throw new Error(t('instance.createPage.pool.selectSshKey'))
+
+      const poolNameValidation = validateInstanceName(form.value.name)
+      if (!poolNameValidation.valid) {
+        throw new Error(poolNameValidation.message)
+      }
+
+      // 只给 poolPriceId：套餐、方案、机器、资源全部由服务端按池子解析，客户端不传也不该传。
+      await api.instances.create({
+        name: form.value.name,
+        poolPriceId: poolProduct.value.id,
+        image: form.value.image,
+        sshKeyId: form.value.sshKeyId,
+        customInitCommandIds: form.value.customInitCommandIds.length > 0 ? form.value.customInitCommandIds : undefined
+      } as unknown as CreateInstanceRequest)
+
+      toast.success(t('instance.createPage.createSuccess'))
+      router.push('/instances')
+      return true
+    }
+
     if (form.value.packageId === null) throw new Error(t('instance.createPage.selectPackage'))
     if (form.value.hostId === null) throw new Error(getCreatePageText('selectHost'))
     if (form.value.sshKeyId === null) throw new Error(getCreatePageText('selectSshKey'))
@@ -1202,7 +1322,7 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
 <template>
   <div class="animate-fade-in lg:h-full lg:flex lg:flex-col">
     <!-- 套餐来源切换器 -->
-    <div v-if="!loading" class="flex justify-center mb-4 lg:mb-3 shrink-0">
+    <div v-if="!loading && !isPoolMode" class="flex justify-center mb-4 lg:mb-3 shrink-0">
       <div
         class="inline-flex max-w-full overflow-x-auto p-1 rounded-full scrollbar-hide"
         :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
@@ -1268,92 +1388,127 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
       <div class="lg:flex lg:flex-1 lg:min-h-0 lg:gap-6">
         <!-- LEFT: 选择区（独立滚动）-->
         <div class="space-y-4 mb-4 lg:mb-0 lg:flex-[3] lg:overflow-y-auto lg:pr-1 lg:pb-4 scrollbar-hide">
-          <div
-            v-if="selectedHostingZone"
-            class="rounded-lg border border-themed bg-themed-tertiary px-5 py-3 text-center"
-          >
-            <p class="text-sm font-medium leading-6 text-themed-secondary">
-              {{ $t('instance.createPage.zoneNotice.content', { uid: selectedHostingZone.ownerId, username: selectedHostingZone.ownerUsername }) }}
-            </p>
-          </div>
-          <RegionSelector
-            v-if="regions.length > 0"
-            :regions="regions"
-            :selected-region="selectedRegion"
-            :loading="regionsLoading"
-            :title="getCreatePageText('selectRegion')"
-            :package-count-label-key="packageCountLabelKey"
-            @select="selectRegion"
-          />
-          <PackageSelector
-            :packages="filteredPackages"
-            :selected-package-id="form.packageId"
-            :step-number="regions.length > 0 ? 2 : 1"
-            :title="getCreatePageText('selectPackage')"
-            :empty-message="getCreatePageText('noPackages')"
-            :sold-out-label="getCreatePageText('planSoldOut')"
-            @select="selectPackage"
-            @show-owner-info="(packageId) => loadHostOwnerInfo(packageId)"
-          />
+          <!-- 池子模式：左栏只展示选定的商品，不再有地区/套餐选择 -->
+          <template v-if="isPoolMode">
+            <div v-if="poolNotFound" class="card p-6 text-center space-y-3">
+              <p class="text-sm text-themed">{{ $t('instance.createPage.pool.notFound') }}</p>
+              <router-link to="/market" class="btn-primary inline-flex">{{ $t('instance.createPage.pool.backToMarket') }}</router-link>
+            </div>
+            <div v-else-if="poolProduct" class="card p-5 space-y-4">
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('instance.createPage.pool.region') }}</div>
+                <div class="mt-1 flex items-center gap-2 text-lg font-medium text-themed">
+                  <FlagIcon v-if="poolRegion?.countryCode" :code="poolRegion.countryCode" size="sm" />
+                  <span>{{ poolRegion?.name }}</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div class="text-xs text-themed-muted">{{ $t('instance.createPage.pool.machine') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ presetLabel(poolProduct.resourcePreset) }}</div>
+                  <div class="text-xs text-themed-muted">{{ poolProduct.cpu }}% CPU · {{ formatMemoryMiB(poolProduct.memoryMiB) }}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-themed-muted">{{ $t('instance.createPage.pool.disk') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ poolProduct.diskGiB }} GiB</div>
+                  <div class="text-xs text-themed-muted">{{ $t('instance.createPage.pool.idle', { idle: poolProduct.idle }) }}</div>
+                </div>
+              </div>
+              <router-link to="/market" class="inline-block text-xs text-themed-muted hover:text-themed">
+                ← {{ $t('instance.createPage.pool.backToMarket') }}
+              </router-link>
+            </div>
+          </template>
+          <template v-else>
+            <div
+              v-if="selectedHostingZone"
+              class="rounded-lg border border-themed bg-themed-tertiary px-5 py-3 text-center"
+            >
+              <p class="text-sm font-medium leading-6 text-themed-secondary">
+                {{ $t('instance.createPage.zoneNotice.content', { uid: selectedHostingZone.ownerId, username: selectedHostingZone.ownerUsername }) }}
+              </p>
+            </div>
+            <RegionSelector
+              v-if="regions.length > 0"
+              :regions="regions"
+              :selected-region="selectedRegion"
+              :loading="regionsLoading"
+              :title="getCreatePageText('selectRegion')"
+              :package-count-label-key="packageCountLabelKey"
+              @select="selectRegion"
+            />
+            <PackageSelector
+              :packages="filteredPackages"
+              :selected-package-id="form.packageId"
+              :step-number="regions.length > 0 ? 2 : 1"
+              :title="getCreatePageText('selectPackage')"
+              :empty-message="getCreatePageText('noPackages')"
+              :sold-out-label="getCreatePageText('planSoldOut')"
+              @select="selectPackage"
+              @show-owner-info="(packageId) => loadHostOwnerInfo(packageId)"
+            />
+          </template>
         </div>
         <!-- RIGHT: 配置区（独立滚动）-->
         <div class="lg:flex-[2] lg:overflow-y-auto lg:pb-4 scrollbar-hide">
           <div ref="rightPanelScrollRef" class="space-y-4">
-            <PlanSelector
-              v-if="isPaidPackage"
-              :plans="packagePlans"
-              :selected-plan-id="form.planId"
-              :instance-type="(selectedPackage?.instance_type === 'vm' ? 'vm' : 'container')"
-              :loading="plansLoading"
-              :step-number="regions.length > 0 ? 3 : 2"
-              :prerequisite-message="prerequisiteMissing ? prerequisiteMessage : null"
-              :free-site-mode="configStore.freeSiteMode"
-              :title="getCreatePageText('selectPlan')"
-              :description="getCreatePageText('planDesc')"
-              :empty-message="getCreatePageText('noPlans')"
-              :sold-out-label="getCreatePageText('planSoldOut')"
-              :custom-plan-hint="getCreatePageText('customPlanHint')"
-              @select="selectPlan"
-            />
-            <div
-              v-else-if="prerequisiteMissing"
-              class="rounded-lg border px-4 py-3 text-sm"
-              :class="themeStore.isDark ? 'border-amber-500/30 bg-amber-900/20 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-700'"
-            >
-              {{ prerequisiteMessage }}
-            </div>
-            <ResourceSliders
-              v-else
-              :selected-package="selectedPackage || null"
-              :user-quota="userQuota"
-              :cpu="form.cpu"
-              :memory="form.memory"
-              :disk="form.disk"
-              :step-number="regions.length > 0 ? 3 : 2"
-              @update:cpu="form.cpu = $event"
-              @update:memory="form.memory = $event"
-              @update:disk="form.disk = $event"
-            />
-            <HostSelector
-              :available-hosts="availableHosts"
-              :selected-host-id="form.hostId"
-              :hosts-loading="hostsLoading"
-              :hosts-insufficient="hostsInsufficient"
-              :cpu="form.cpu"
-              :memory="form.memory"
-              :selected-package="selectedPackage || null"
-              :show-deduction="!isPaidPackage || form.planId !== null"
-              :title="getCreatePageText('selectHost')"
-              :auto-selected-label="getCreatePageText('hostAutoSelected')"
-              @update:selected-host-id="form.hostId = $event"
-            />
+            <template v-if="!isPoolMode">
+              <PlanSelector
+                v-if="isPaidPackage"
+                :plans="packagePlans"
+                :selected-plan-id="form.planId"
+                :instance-type="(selectedPackage?.instance_type === 'vm' ? 'vm' : 'container')"
+                :loading="plansLoading"
+                :step-number="regions.length > 0 ? 3 : 2"
+                :prerequisite-message="prerequisiteMissing ? prerequisiteMessage : null"
+                :free-site-mode="configStore.freeSiteMode"
+                :title="getCreatePageText('selectPlan')"
+                :description="getCreatePageText('planDesc')"
+                :empty-message="getCreatePageText('noPlans')"
+                :sold-out-label="getCreatePageText('planSoldOut')"
+                :custom-plan-hint="getCreatePageText('customPlanHint')"
+                @select="selectPlan"
+              />
+              <div
+                v-else-if="prerequisiteMissing"
+                class="rounded-lg border px-4 py-3 text-sm"
+                :class="themeStore.isDark ? 'border-amber-500/30 bg-amber-900/20 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-700'"
+              >
+                {{ prerequisiteMessage }}
+              </div>
+              <ResourceSliders
+                v-else
+                :selected-package="selectedPackage || null"
+                :user-quota="userQuota"
+                :cpu="form.cpu"
+                :memory="form.memory"
+                :disk="form.disk"
+                :step-number="regions.length > 0 ? 3 : 2"
+                @update:cpu="form.cpu = $event"
+                @update:memory="form.memory = $event"
+                @update:disk="form.disk = $event"
+              />
+              <HostSelector
+                :available-hosts="availableHosts"
+                :selected-host-id="form.hostId"
+                :hosts-loading="hostsLoading"
+                :hosts-insufficient="hostsInsufficient"
+                :cpu="form.cpu"
+                :memory="form.memory"
+                :selected-package="selectedPackage || null"
+                :show-deduction="!isPaidPackage || form.planId !== null"
+                :title="getCreatePageText('selectHost')"
+                :auto-selected-label="getCreatePageText('hostAutoSelected')"
+                @update:selected-host-id="form.hostId = $event"
+              />
+            </template>
             <ImageSelector
               :available-images="availableImages"
               :selected-image="form.image"
               :images-loading="imagesLoading"
-              :step-number="regions.length > 0 ? 4 : 3"
-              :title="getCreatePageText('selectSystem')"
-              :empty-message="getCreatePageText('noImages')"
+              :step-number="isPoolMode ? 1 : (regions.length > 0 ? 4 : 3)"
+              :title="isPoolMode ? $t('instance.createPage.pool.selectSystem') : getCreatePageText('selectSystem')"
+              :empty-message="isPoolMode ? $t('instance.createPage.pool.noImages') : getCreatePageText('noImages')"
               @update:selected-image="form.image = $event"
             />
             <div v-if="form.image" class="card p-5">
@@ -1362,10 +1517,44 @@ async function continueAfterSshKeyGeneration(): Promise<void> {
             <SSHKeySelector
               :ssh-keys="sshKeys"
               :selected-key-id="form.sshKeyId"
-              :step-number="regions.length > 0 ? 5 : 4"
-              :title="getCreatePageText('selectSshKey')"
+              :step-number="isPoolMode ? 2 : (regions.length > 0 ? 5 : 4)"
+              :title="isPoolMode ? $t('instance.createPage.pool.selectSshKey') : getCreatePageText('selectSshKey')"
               @update:selected-key-id="form.sshKeyId = $event"
             />
+            <!-- 池子模式订单概览：月费 + 一次性初装费 -->
+            <div v-if="isPoolMode && poolProduct" class="card p-5">
+              <h3 class="font-semibold text-themed mb-4">{{ $t('instance.createPage.pool.summary') }}</h3>
+              <dl class="space-y-2 text-sm">
+                <div class="flex justify-between gap-3">
+                  <dt class="text-themed-muted">{{ $t('instance.createPage.pool.region') }}</dt>
+                  <dd class="text-themed flex items-center gap-1.5">
+                    <FlagIcon v-if="poolRegion?.countryCode" :code="poolRegion.countryCode" size="xs" />
+                    <span>{{ poolRegion?.name }}</span>
+                  </dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <dt class="text-themed-muted">{{ $t('instance.createPage.pool.machine') }}</dt>
+                  <dd class="text-themed">{{ presetLabel(poolProduct.resourcePreset) }} · {{ poolProduct.cpu }}% CPU · {{ formatMemoryMiB(poolProduct.memoryMiB) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <dt class="text-themed-muted">{{ $t('instance.createPage.pool.disk') }}</dt>
+                  <dd class="text-themed">{{ poolProduct.diskGiB }} GiB</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <dt class="text-themed-muted">{{ $t('instance.createPage.pool.monthly') }}</dt>
+                  <dd class="text-themed">¥{{ formatPublicPrice(poolProduct.monthlyPrice) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <dt class="text-themed-muted">{{ $t('instance.createPage.pool.setupFee') }}</dt>
+                  <dd class="text-themed">{{ poolProduct.setupFee > 0 ? `¥${formatPublicPrice(poolProduct.setupFee)}` : $t('instance.createPage.pool.none') }}</dd>
+                </div>
+              </dl>
+              <div class="mt-4 pt-4 border-t border-themed flex items-center justify-between">
+                <span class="text-sm font-medium text-themed">{{ $t('instance.createPage.pool.total') }}</span>
+                <span class="text-2xl font-bold text-themed">¥{{ formatPublicPrice(poolProduct.monthlyPrice + poolProduct.setupFee) }}</span>
+              </div>
+              <p class="mt-3 text-xs text-themed-muted leading-relaxed">{{ $t('instance.createPage.pool.notice') }}</p>
+            </div>
             <!-- 订单概览 -->
             <div v-if="isPaidPackage && form.planId && selectedPlan" class="card p-5">
               <div class="flex items-center gap-3 mb-5">

@@ -598,6 +598,8 @@ export async function getInstancesPaginated(options: PaginationOptions = {}): Pr
       user_avatar_badge_id: i.user.avatarBadgeId,
       package_name: i.package?.name || null,
       package_plan_id: i.packagePlanId,
+      // 一机一卖商品：前端据此隐藏「重试开通」
+      poolPriceId: i.poolPriceId ?? null,
       billing_mode: i.billingMode,
       billing_price: i.billingPrice ? Number(i.billingPrice) : null,
       package_instance_type: i.package?.instanceType || 'container',

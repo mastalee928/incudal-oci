@@ -144,6 +144,13 @@ export const ErrorCode = {
     BALANCE_TRANSFER_INSUFFICIENT_BALANCE: 'BALANCE_TRANSFER_INSUFFICIENT_BALANCE',
     BALANCE_TRANSFER_BALANCE_LIMIT_EXCEEDED: 'BALANCE_TRANSFER_BALANCE_LIMIT_EXCEEDED',
 
+    // Pool order errors (one-machine-one-sale cart / multi-instance orders)
+    POOL_ORDER_INVALID: 'POOL_ORDER_INVALID',
+    POOL_ORDER_TOO_LARGE: 'POOL_ORDER_TOO_LARGE',
+    POOL_PRICE_CHANGED: 'POOL_PRICE_CHANGED',
+    POOL_STOCK_SHORT: 'POOL_STOCK_SHORT',
+    POOL_INSTANCE_NOT_RETRYABLE: 'POOL_INSTANCE_NOT_RETRYABLE',
+
     // Host resource errors
     HOST_UNAVAILABLE: 'HOST_UNAVAILABLE',
     HOST_NO_ONLINE: 'HOST_NO_ONLINE',
@@ -495,6 +502,13 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.BALANCE_TRANSFER_AMOUNT_INVALID]: 'Invalid transfer amount',
     [ErrorCode.BALANCE_TRANSFER_INSUFFICIENT_BALANCE]: 'Insufficient balance for this transfer',
     [ErrorCode.BALANCE_TRANSFER_BALANCE_LIMIT_EXCEEDED]: 'Recipient balance would exceed the allowed limit',
+
+    // Pool order errors
+    [ErrorCode.POOL_ORDER_INVALID]: 'Order is empty or contains invalid items',
+    [ErrorCode.POOL_ORDER_TOO_LARGE]: 'Order exceeds the maximum number of machines per checkout',
+    [ErrorCode.POOL_PRICE_CHANGED]: 'Prices changed since the cart was built, please review the new total',
+    [ErrorCode.POOL_STOCK_SHORT]: 'Not enough machines in stock for one or more items',
+    [ErrorCode.POOL_INSTANCE_NOT_RETRYABLE]: 'Dedicated machine orders cannot be retried; the failed machine was refunded, please order again',
 
     // Host resource errors
     [ErrorCode.HOST_UNAVAILABLE]: 'Selected host is unavailable or has insufficient resources',

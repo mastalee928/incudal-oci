@@ -77,6 +77,7 @@ const form = ref({
   popup_promo_package_id: '',
   hosting_feature_enabled: true,
   hosting_market_entry_enabled: true,
+  pool_order_max_instances: 100,
   aff_rebate_enabled: false,
   hosting_notice: '',
   ticket_enabled: true,
@@ -155,7 +156,7 @@ const configMeta = computed(() => {
 
 // 数字类型的配置键
 // 注意：不再限制实例配额，已删除 default_quota_instance
-const numericConfigKeys = ['default_quota_host', 'default_quota_friend', 'default_quota_package', 'smtp_port', 'free_site_register_gift_points', 'invite_default_expire_days']
+const numericConfigKeys = ['default_quota_host', 'default_quota_friend', 'default_quota_package', 'smtp_port', 'free_site_register_gift_points', 'invite_default_expire_days', 'pool_order_max_instances']
 
 // 浮点数类型的配置键
 const floatConfigKeys = ['transfer_fee', 'balance_transfer_fee', 'free_site_register_gift_balance']
@@ -443,7 +444,7 @@ const hasTransferChanges = computed(() => {
   })
 })
 
-const hostingFeatureKeys = ['hosting_feature_enabled', 'hosting_market_entry_enabled', 'hosting_notice']
+const hostingFeatureKeys = ['hosting_feature_enabled', 'hosting_market_entry_enabled', 'hosting_notice', 'pool_order_max_instances']
 async function saveHostingFeature() {
   await saveConfigGroup(hostingFeatureKeys, savingHostingFeature)
   await configStore.loadPublicConfig(true)
@@ -1163,6 +1164,12 @@ async function sendTestEmail() {
                   {{ t('admin.system.hostingFeature.marketEntryVisible') }}
                 </span>
               </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">{{ t('hostPools.orderMax') }}</label>
+              <input v-model.number="form.pool_order_max_instances" type="number" min="1" max="1000" step="1" class="input max-w-xs" />
+              <p class="text-xs text-themed-muted">{{ t('hostPools.orderMaxDesc') }}</p>
             </div>
 
             <div class="space-y-2">

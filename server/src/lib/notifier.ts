@@ -26,6 +26,10 @@ type EventType =
   | 'instance_created'
   | 'instance_create_failed'
   | 'instance_create_timeout'
+  // 一机一卖多台订单
+  | 'pool_order_submitted'
+  | 'pool_order_completed'
+  | 'pool_host_provision_failed'
   | 'instance_started'
   | 'instance_stopped'
   | 'instance_restarted'
@@ -109,6 +113,12 @@ interface EventData {
   ipv6?: string               // IPv6 地址
   networkMode?: string        // 网络模式
   packageName?: string        // 套餐名称
+  // 一机一卖多台订单
+  batchId?: string            // 批次号
+  totalCount?: number         // 本单台数
+  readyCount?: number         // 已就绪台数
+  failedCount?: number        // 开通失败台数
+  orderAmount?: number        // 订单金额（元）
   // 备份相关
   storageName?: string        // 存储配置名称
   fileName?: string           // 文件名
@@ -329,6 +339,37 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
       if (data.hostName) msg += `\n节点: ${data.hostName}`
       msg += `\n资源已自动回滚，请稍后重试`
       msg += `\n可能原因: 镜像下载缓慢 / 节点繁忙 / 网络问题`
+      return msg
+    }
+  },
+  pool_order_submitted: {
+    title: '🧾 订单已受理',
+    message: (data) => {
+      let msg = `您的订单已受理，${data.totalCount ?? 0} 台机器开始开通`
+      if (data.orderAmount !== undefined) msg += `\n本次扣款: ¥${data.orderAmount.toFixed(2)}`
+      if (data.batchId) msg += `\n批次号: ${data.batchId}`
+      msg += `\n全部完成后会再通知您一次`
+      return msg
+    }
+  },
+  pool_order_completed: {
+    title: '✅ 订单开通完成',
+    message: (data) => {
+      let msg = `批次 ${data.batchId ?? ''}：${data.readyCount ?? 0} 台已就绪`
+      if (data.failedCount) {
+        msg += `，${data.failedCount} 台开通失败`
+        if (data.refundAmount) msg += `，已退款 ¥${data.refundAmount.toFixed(2)} 到余额`
+      }
+      msg += `\n失败的机器不会重试，如需补足请重新下单`
+      return msg
+    }
+  },
+  pool_host_provision_failed: {
+    title: '🛠️ 宿主机开通失败，已置为维护',
+    message: (data) => {
+      let msg = `宿主机「${data.hostName}」上的实例「${data.instanceName}」开通失败，客户已全额退款`
+      if (data.error) msg += `\n错误: ${data.error}`
+      msg += `\n该机器已置为维护、退出销售，请检查后在主机管理里恢复在线`
       return msg
     }
   },

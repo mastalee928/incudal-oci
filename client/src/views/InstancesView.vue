@@ -720,6 +720,8 @@ function getInstanceExpiryInfo(instance: Instance): InstanceExpiryInfo {
 type InstanceAction = 'start' | 'stop' | 'restart' | 'retry' | 'delete'
 
 function canRetryProvision(instance: Instance): boolean {
+  // 一机一卖：失败已退款并自动删除，不在原机器上重试
+  if (instance.poolPriceId) return false
   return instance.status?.toLowerCase() === 'error'
     && (isAdmin.value || instance.userId === undefined || instance.userId === authStore.user?.id)
 }

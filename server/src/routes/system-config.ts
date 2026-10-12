@@ -89,7 +89,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
     fastify.get('/public', {
         config: { rateLimit: { max: 60, timeWindow: '1 minute' } }
     }, async (_request: FastifyRequest, _reply: FastifyReply) => {
-        const [registrationEnabled, requireInviteCode, ticketEnabled, freeSiteMode, affRebateEnabled, turnstileEnabled, turnstileSiteKey, avatarApiBase, smtpEnabled, emailDomainWhitelistEnabled, emailAllowedDomains, transferFee, balanceTransferEnabled, balanceTransferFee, footerContactEmail, footerTelegramLink, hostingMarketEntryEnabled, hostingNotice, brandName, brandSubtitle, brandLogoUrl, popupAnnouncementConfig, popupPromoImageUrlConfig, popupPromoPackageIdConfig] = await Promise.all([
+        const [registrationEnabled, requireInviteCode, ticketEnabled, freeSiteMode, affRebateEnabled, turnstileEnabled, turnstileSiteKey, avatarApiBase, smtpEnabled, emailDomainWhitelistEnabled, emailAllowedDomains, transferFee, balanceTransferEnabled, balanceTransferFee, footerContactEmail, footerTelegramLink, hostingMarketEntryEnabled, hostingNotice, poolOrderMaxInstances, brandName, brandSubtitle, brandLogoUrl, popupAnnouncementConfig, popupPromoImageUrlConfig, popupPromoPackageIdConfig] = await Promise.all([
             db.isRegistrationEnabled(),
             db.isInviteCodeRequired(),
             db.getSystemConfigBoolean('ticket_enabled', true),
@@ -108,6 +108,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             db.getSystemConfig('footer_telegram_link'),
             db.getSystemConfigBoolean('hosting_market_entry_enabled', true),
             db.getSystemConfig('hosting_notice'),
+            db.getSystemConfigNumber('pool_order_max_instances', 100),
             db.getSystemConfig('brand_name'),
             db.getSystemConfig('brand_subtitle'),
             db.getSystemConfig('brand_logo_url'),
@@ -231,6 +232,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             footerTelegramLink: getSafeTelegramUrl(footerTelegramLink),
             hostingMarketEntryEnabled,
             hostingNotice,
+            poolOrderMaxInstances: Math.max(1, Math.floor(poolOrderMaxInstances)),
             brandName: brandName || 'Incudal',
             brandSubtitle: brandSubtitle || '基于 Incus 的低价 NAT VPS',
             brandLogoUrl: brandLogoUrl || '/incudal_logo.webp',

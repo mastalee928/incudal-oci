@@ -211,3 +211,11 @@ export function formatMemoryMiB(mib: number): string {
   if (mib >= 1024) return `${(mib / 1024).toFixed(mib % 1024 === 0 ? 0 : 1)} GiB`
   return `${mib} MiB`
 }
+
+/** 多台时的实例名：一台就是前缀本身，多台「前缀-01」起编号。与服务端生成规则一致。 */
+export function buildPoolInstanceNames(prefix: string, quantity: number): string[] {
+  const count = Math.max(1, Math.floor(quantity))
+  if (count === 1) return [prefix]
+  const width = Math.max(2, String(count).length)
+  return Array.from({ length: count }, (_, index) => `${prefix}-${String(index + 1).padStart(width, '0')}`)
+}

@@ -1167,6 +1167,7 @@ model Instance {
   packageId        Int?           @map("package_id")
   packagePlanId    Int?           @map("package_plan_id")  // 套餐方案 ID：按小时方案也保留关联，免费实例为 null
   poolPriceId      Int?           @map("pool_price_id")    // 一机一卖商品（池子价格行）；旧模型实例为 null
+  purchaseBatchId  String?        @map("purchase_batch_id") @db.VarChar(32) // 同一次付款的批次号，只用于归组与汇总通知
   billingMode      InstanceBillingMode @default(package) @map("billing_mode")
   storagePoolName  String?        @map("storage_pool_name")
   image            String
@@ -1311,6 +1312,7 @@ model Instance {
   @@index([billingMode, status])
   @@index([userId, displayOrder, createdAt(sort: Desc)])
   @@index([poolPriceId])
+  @@index([purchaseBatchId])
   @@map("instances")
 }
 
@@ -2652,6 +2654,7 @@ model InstanceBillingRecord {
   // 关联
   balanceLogId Int? @map("balance_log_id") // 关联余额日志
   transferId   Int? @unique @map("transfer_id") // 转移手续费账单幂等键
+  purchaseBatchId String? @map("purchase_batch_id") @db.VarChar(32) // 多台订单批次号，只用于归组展示
 
   remark    String?
   createdAt DateTime @default(now()) @map("created_at")
@@ -2661,6 +2664,7 @@ model InstanceBillingRecord {
 
   @@index([instanceId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([purchaseBatchId])
   @@map("instance_billing_records")
 }
 

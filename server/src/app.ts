@@ -47,6 +47,7 @@ import hostRoutes from './routes/hosts.js'
 import hostPortProtocolRoutes from './routes/host-port-protocol.js'
 import hostOnboardingRoutes from './routes/host-onboarding.js'
 import hostPoolPriceRoutes from './routes/host-pool-prices.js'
+import poolOrderRoutes from './routes/pool-orders.js'
 import packageRoutes from './routes/packages.js'
 import snapshotRoutes from './routes/snapshots.js'
 import sshKeyRoutes from './routes/ssh-keys.js'
@@ -418,6 +419,7 @@ await fastify.register(hostRoutes, { prefix: '/api/hosts' })
 await fastify.register(hostPortProtocolRoutes, { prefix: '/api/hosts' })
 await fastify.register(hostOnboardingRoutes, { prefix: '/api/host-onboarding' })
 await fastify.register(hostPoolPriceRoutes, { prefix: '/api/host-pools' })
+await fastify.register(poolOrderRoutes, { prefix: '/api/instances' })
 await fastify.register(packageRoutes, { prefix: '/api/packages' })
 await fastify.register(snapshotRoutes, { prefix: '/api/instances' })
 await fastify.register(sshKeyRoutes, { prefix: '/api/ssh-keys' })

@@ -41,6 +41,7 @@ export const useConfigStore = defineStore('config', () => {
     const footerContactEmail = ref<string | null>('incudal@sent.com')
     const footerTelegramLink = ref<string | null>('https://t.me/incudal_com')
     const hostingMarketEntryEnabled = ref(true)
+    const poolOrderMaxInstances = ref(100)
     const hostingNotice = ref<string | null>(null)
     const seoTrackingEnabled = ref(false)
     const seoTrackingScriptUrl = ref('https://www.googletagmanager.com/gtag/js')
@@ -80,6 +81,7 @@ export const useConfigStore = defineStore('config', () => {
                 footerContactEmail.value = config.footerContactEmail ?? null
                 footerTelegramLink.value = config.footerTelegramLink ?? null
                 hostingMarketEntryEnabled.value = config.hostingMarketEntryEnabled ?? true
+                poolOrderMaxInstances.value = Math.max(1, config.poolOrderMaxInstances ?? 100)
                 hostingNotice.value = config.hostingNotice ?? null
                 seoTrackingEnabled.value = config.seoTrackingEnabled ?? false
                 seoTrackingScriptUrl.value = config.seoTrackingScriptUrl?.trim() || 'https://www.googletagmanager.com/gtag/js'
@@ -119,6 +121,7 @@ export const useConfigStore = defineStore('config', () => {
         footerContactEmail,
         footerTelegramLink,
         hostingMarketEntryEnabled,
+        poolOrderMaxInstances,
         hostingNotice,
         seoTrackingEnabled,
         seoTrackingScriptUrl,

@@ -967,6 +967,16 @@ const api = {
       http.post(`/instances/${id}/retry-provision`, {}),
     getAvailableHosts: (params: Record<string, unknown> = {}): Promise<{ hosts: AvailableHost[] }> =>
       http.get('/instances/available-hosts', { params }),
+    // 一机一卖多台订单：购物车结算与「直接付款」共用；整单全有或全无
+    poolOrder: (data: {
+      items: Array<{ poolPriceId: number; quantity: number; namePrefix: string; image: string; customInitCommandIds?: number[] }>
+      sshKeyId: number
+      expectedTotal: number
+    }): Promise<{
+      batchId: string
+      total: number
+      instances: Array<{ id: number; name: string; incusId: string; host: string; status: 'creating'; sshPort: number | null; rootPassword: string }>
+    }> => http.post('/instances/pool-order', data, { timeout: TIMEOUT.LONG }),
     getChangeHostOptions: (id: number): Promise<ChangeHostOptionsResponse> =>
       http.get(`/instances/${id}/change-host-options`),
     changeHost: (id: number, data: { targetHostId: number; sshKeyId: number }): Promise<{ message: string; taskId: number; status: string }> =>
@@ -2316,6 +2326,7 @@ const api = {
       footerTelegramLink?: string | null
       hostingMarketEntryEnabled?: boolean
       hostingNotice?: string | null
+      poolOrderMaxInstances?: number
       brandName?: string | null
       brandSubtitle?: string | null
       brandLogoUrl?: string | null

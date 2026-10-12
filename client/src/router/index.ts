@@ -274,9 +274,10 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'onboarding.title', title: '批量接入' }
   },
   {
+    // 定价已并入「主机接入与管理」第三个页签；旧链接与站内跳转仍可用
     path: '/admin/host-pools',
     name: 'admin-host-pools',
-    component: () => import('@/views/admin/HostPoolPricingView.vue'),
+    redirect: { path: '/admin/host-onboarding', query: { tab: 'pricing' } },
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'hostPools.title', title: '池子定价' }
   },
   {

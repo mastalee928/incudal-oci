@@ -1351,6 +1351,9 @@ const api = {
     deleteRegionGroup: (id: number): Promise<{ success: boolean }> => http.delete(`/host-onboarding/groups/regions/${id}`),
     inventory: (params: HostInventoryQuery = {}): Promise<HostInventoryResponse> => http.get('/host-onboarding/inventory', { params }),
     updateGroups: (data: UpdateHostGroupsRequest): Promise<{ success: boolean; updated: number }> => http.patch('/host-onboarding/inventory/groups', data),
+    // 给已接入的机器补设规格（机型/核心 + 磁盘档），配额按预设自动算
+    updateSpec: (data: { hostIds: number[]; resourcePreset: string; customerDiskGiB: number }): Promise<{ success: boolean; updated: number }> =>
+      http.patch('/host-onboarding/inventory/spec', data),
     gateway: (): Promise<OnboardingGatewayStatus> => http.get('/host-onboarding/gateway'),
     list: (params: { page?: number; search?: string } = {}): Promise<OnboardingListResponse> => http.get('/host-onboarding', { params }),
     create: (data: CreateOnboardingRequest): Promise<{ id: string }> => http.post('/host-onboarding', data),
@@ -1366,7 +1369,10 @@ const api = {
     savePrices: (items: HostPoolPriceInput[]): Promise<{ saved: number; ids: number[] }> =>
       http.post('/host-pools/prices/batch', { items }),
     deletePrice: (id: number): Promise<{ success: boolean }> => http.delete(`/host-pools/prices/${id}`),
-    inventory: (): Promise<{ pools: HostPoolInventoryRow[] }> => http.get('/host-pools/inventory')
+    inventory: (): Promise<{
+      pools: HostPoolInventoryRow[]
+      unspecified: Array<{ id: number; name: string; architecture: string; machineGroupId: number | null; regionGroupId: number | null; machineGroup: string | null; regionGroup: string | null }>
+    }> => http.get('/host-pools/inventory')
   },
   hosts: {
     getPortProtocol: (id: number): Promise<HostPortProtocolState> => http.get(`/hosts/${id}/port-protocol`),

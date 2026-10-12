@@ -6,7 +6,8 @@ import { useToast } from '@/stores/toast'
 import HostPortProtocolSetting from '@/components/host/HostPortProtocolSetting.vue'
 import PortProtocolBadge from '@/components/instance/PortProtocolBadge.vue'
 import { availableFlagCountryCodes, getLocalizedCountryName } from '@/utils/countryDisplay'
-import type { ManagedHost, UpdateHostGroupsRequest, HostMachineGroup, HostStockCounts, HostRegionGroup } from '@/types/api'
+import type { ManagedHost, UpdateHostGroupsRequest, HostMachineGroup, HostStockCounts, HostRegionGroup, ResourcePreset } from '@/types/api'
+import { presetLabel } from '@/utils/publicCatalog'
 
 const { t, te, locale } = useI18n()
 const toast = useToast()
@@ -42,6 +43,32 @@ const groupEditor = ref<{ kind: 'machine' | 'region'; id?: number; parentId?: nu
 const removeGroup = ref<{ kind: 'machine' | 'region'; id: number; name: string } | null>(null)
 const saving = ref(false)
 const protocolHost = ref<ManagedHost | null>(null)
+// 设置规格：机型/核心 + 磁盘档；配额按预设自动算。这是机器进入池子的前提。
+const PRESETS: ResourcePreset[] = ['E2', 'ARM1C', 'ARM2C', 'ARM3C', 'ARM4C']
+const DISK_TIERS = [30, 60, 90, 120]
+const specTargets = ref<ManagedHost[]>([])
+const specPreset = ref<ResourcePreset>('E2')
+const specDisk = ref<number>(30)
+const specArchMismatch = computed(() => specTargets.value.filter(host => host.architecture !== (specPreset.value.startsWith('ARM') ? 'aarch64' : 'x86_64')))
+function hasSpec(host: ManagedHost) { return !!host.resourcePreset && host.customerDiskGiB !== null && host.cpuAllowanceMax > 0 }
+function openSpec(targets: ManagedHost[]) {
+  specTargets.value = targets
+  const first = targets[0]
+  specPreset.value = (first?.resourcePreset as ResourcePreset | null) || (first?.architecture === 'aarch64' ? 'ARM1C' : 'E2')
+  specDisk.value = first?.customerDiskGiB && DISK_TIERS.includes(first.customerDiskGiB) ? first.customerDiskGiB : 30
+}
+function closeSpec() { if (!saving.value) specTargets.value = [] }
+async function saveSpec() {
+  if (saving.value || specArchMismatch.value.length) return
+  saving.value = true
+  try {
+    await api.hostOnboarding.updateSpec({ hostIds: specTargets.value.map(host => host.id), resourcePreset: specPreset.value, customerDiskGiB: specDisk.value })
+    specTargets.value = []; selected.value = []
+    toast.success(t('hostInventory.specSaved'))
+    await refresh()
+  } catch (error) { groupError(error) }
+  finally { saving.value = false }
+}
 let disposed = false
 let sequence = 0
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -156,6 +183,7 @@ defineExpose({ refresh })
       <div class="flex flex-wrap items-center gap-3">
         <label class="flex items-center gap-2 text-sm text-themed"><input v-model="allSelected" type="checkbox" :disabled="!hosts.length" />{{ t('hostInventory.selectPage') }}</label>
         <button type="button" class="btn-secondary text-xs whitespace-nowrap" :disabled="!selected.length" @click="openGroups(hosts.filter(host => selected.includes(host.id)))">{{ t('hostInventory.batchGroups', { count: selected.length }) }}</button>
+        <button type="button" class="btn-secondary text-xs whitespace-nowrap" :disabled="!selected.length" @click="openSpec(hosts.filter(host => selected.includes(host.id)))">{{ t('hostInventory.batchSpec', { count: selected.length }) }}</button>
       </div>
       <span class="text-xs text-themed-muted">{{ t('hostInventory.total', { count: total }) }}</span>
     </div>
@@ -179,8 +207,10 @@ defineExpose({ refresh })
             <span class="px-2 py-1 rounded bg-themed-secondary text-themed break-all">{{ host.regionGroup || t('hostInventory.regionUnset') }}</span>
           </div>
           <p v-if="host.accountLabel" class="text-xs text-themed-muted mt-2 break-words">{{ t('onboarding.accountLabel') }}: {{ host.accountLabel }}</p>
-          <p class="text-xs text-themed mt-2">{{ host.resourcePreset || t('onboarding.autoResources') }} · {{ host.cpuAllowanceMax / 100 }} CPU · {{ host.memoryMax }} MiB</p>
-          <p class="text-xs text-themed-muted mt-1">{{ t('onboarding.customerDisk') }}: {{ host.customerDiskGiB === null ? t('common.notSet') : host.customerDiskGiB + ' GiB' }}</p>
+          <p class="text-xs mt-2" :class="hasSpec(host) ? 'text-themed' : 'text-amber-600 dark:text-amber-400 font-medium'">
+            <template v-if="hasSpec(host)">{{ presetLabel(host.resourcePreset!) }} · {{ host.cpuAllowanceMax / 100 }} CPU · {{ host.memoryMax }} MiB · {{ host.customerDiskGiB }} GiB</template>
+            <template v-else>{{ t('hostInventory.specMissing') }}</template>
+          </p>
           <p v-if="host.resourceSnapshot" class="text-xs text-themed-muted mt-1">{{ t('hostInventory.detectedMemory', { memory: host.resourceSnapshot.probe.memoryMiB, pool: host.storageSize }) }}</p>
         </div>
         <div class="col-start-2 xl:col-start-auto min-w-0 space-y-2">
@@ -193,6 +223,7 @@ defineExpose({ refresh })
         <div class="col-start-2 xl:col-start-auto flex flex-wrap gap-2 xl:max-w-48 xl:justify-end">
           <RouterLink :to="`/resources/hosts/${host.id}`" class="btn-primary text-xs whitespace-nowrap">{{ t('hostInventory.manage') }}</RouterLink>
           <button type="button" class="btn-secondary text-xs whitespace-nowrap" @click="openGroups([host])">{{ t('hostInventory.groups') }}</button>
+          <button type="button" class="text-xs whitespace-nowrap" :class="hasSpec(host) ? 'btn-secondary' : 'btn-primary'" @click="openSpec([host])">{{ t('hostInventory.spec') }}</button>
           <button type="button" class="btn-secondary text-xs whitespace-nowrap" @click="protocolHost = host">{{ t('hostInventory.protocol') }}</button>
         </div>
       </article>
@@ -222,6 +253,28 @@ defineExpose({ refresh })
             </fieldset>
           </div>
           <div class="modal-footer gap-2"><button type="button" class="btn-secondary" :disabled="saving" @click="closeGroups">{{ t('common.cancel') }}</button><button class="btn-primary" type="submit" :disabled="saving || (machineAction === 'keep' && regionAction === 'keep')">{{ t(saving ? 'common.saving' : 'common.save') }}</button></div>
+        </form>
+      </div>
+      <div v-if="specTargets.length" class="modal-overlay" @keydown.esc="closeSpec">
+        <div class="modal-backdrop" @click="closeSpec"></div>
+        <form class="modal-content max-w-xl max-h-[90dvh] flex flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="host-spec-title" @submit.prevent="saveSpec">
+          <div class="modal-header"><h2 id="host-spec-title" class="modal-title">{{ t('hostInventory.specTitle') }}</h2></div>
+          <div class="modal-body min-h-0 overflow-y-auto">
+            <fieldset class="space-y-4 min-w-0" :disabled="saving">
+              <p class="text-sm text-themed break-words">{{ specTargets.length === 1 ? `${specTargets[0].name} · ${specTargets[0].architecture}` : t('hostInventory.selectedCount', { count: specTargets.length }) }}</p>
+              <p class="text-xs text-themed-muted">{{ t('hostInventory.specHint') }}</p>
+              <div>
+                <label class="block text-sm text-themed" for="host-spec-preset">{{ t('hostPools.specPreset') }}</label>
+                <select id="host-spec-preset" v-model="specPreset" class="input w-full mt-1"><option v-for="preset in PRESETS" :key="preset" :value="preset">{{ presetLabel(preset) }}</option></select>
+                <p v-if="specArchMismatch.length" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ t('hostInventory.specArchMismatch', { names: specArchMismatch.map(host => host.name).join(', ') }) }}</p>
+              </div>
+              <div>
+                <label class="block text-sm text-themed" for="host-spec-disk">{{ t('hostPools.specDisk') }}</label>
+                <select id="host-spec-disk" v-model.number="specDisk" class="input w-full mt-1"><option v-for="tier in DISK_TIERS" :key="tier" :value="tier">{{ tier }} GiB</option></select>
+              </div>
+            </fieldset>
+          </div>
+          <div class="modal-footer gap-2"><button type="button" class="btn-secondary" :disabled="saving" @click="closeSpec">{{ t('common.cancel') }}</button><button class="btn-primary" type="submit" :disabled="saving || specArchMismatch.length > 0">{{ t(saving ? 'common.saving' : 'common.save') }}</button></div>
         </form>
       </div>
       <div v-if="showGroupManager && !groupEditor && !removeGroup" class="modal-overlay" @keydown.esc="showGroupManager = false">

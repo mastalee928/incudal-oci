@@ -206,7 +206,8 @@ export default {
             "INSTALL_DOWNLOAD_FAILED": "The host could not download the panel installer.",
             "TLS_BOOTSTRAP_MISSING": "The host has not returned its Incus TLS certificate.",
             "AGENT_NOT_READY": "Agent heartbeat or protocol acknowledgement is missing. Check the Agent version and connectivity, then retry.",
-            "ONBOARDING_STEP_FAILED": "The current stage failed. Check the host and retry."
+            "ONBOARDING_STEP_FAILED": "The current stage failed. Check the host and retry.",
+            "HOST_SPEC_INSTANCE_EXCEEDS": "An existing instance on this host exceeds the quota of the chosen spec."
         }
     },
     hostPools: {
@@ -233,6 +234,28 @@ export default {
         loadFailed: 'Could not load prices. Please refresh.',
         orderMax: 'Max machines per checkout',
         orderMaxDesc: 'Maximum number of machines in a single payment (cart lines combined); larger orders are rejected.',
+        pricingTab: 'Pricing',
+        flatDescription: 'Price what you actually have: each row is a pool summarised from your machines (machine type / cores + region + disk tier). Empty monthly fee = not for sale; setup fee 0 = none; prices are in yuan.',
+        unspecifiedBanner: '{count} machines have no spec yet, so they belong to no pool and cannot be priced.',
+        unspecifiedHint: 'Pick the machine type / cores and disk tier; CPU and memory quotas follow the preset. Machines with a different architecture cannot be selected.',
+        archMismatch: 'architecture mismatch',
+        specPreset: 'Machine / cores',
+        specDisk: 'Disk tier',
+        selectAll: 'Select all',
+        applySpec: 'Set spec ({count})',
+        applying: 'Setting...',
+        specSaved: 'Spec saved, machines joined their pools',
+        specFailed: 'Could not set the spec',
+        poolsEmpty: 'No machines with a spec yet. Onboard machines and set their spec; pools appear here automatically.',
+        colMachine: 'Machine / cores',
+        colRegion: 'Region',
+        colDisk: 'Disk',
+        colStock: 'Machines',
+        colMonthly: 'Monthly (¥)',
+        colSetup: 'Setup fee (¥)',
+        colActive: 'On sale',
+        stockCell: '{idle} idle / {total}',
+        noHosts: '0 (no machines left)',
         continent: {
             'asia-pacific': 'Asia Pacific',
             'north-america': 'North America',
@@ -243,6 +266,13 @@ export default {
         }
     },
     hostInventory: {
+        "spec": "Spec",
+        "batchSpec": "Set spec ({count})",
+        "specTitle": "Set spec",
+        "specHint": "Machine type / cores sets the CPU and memory quota, the disk tier sets the disk the customer gets. A machine joins a pool, and can be priced and sold, only after its spec is set.",
+        "specMissing": "No spec yet, not in any pool",
+        "specSaved": "Spec saved",
+        "specArchMismatch": "Architecture mismatch for this machine type: {names}",
         "manageGroups": "Manage groups",
         "addMachine": "Add machine group",
         "addRegion": "Add region",

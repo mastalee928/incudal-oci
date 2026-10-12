@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { Prisma } from '@prisma/client'
+import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
 import { OnboardingError, RESOURCE_PRESETS } from '../lib/host-onboarding.js'
 import { deletePoolPrice, listPoolPrices, poolInventory, upsertPoolPrice, upsertPoolPrices, type PoolPriceInput } from '../services/host-pool-prices.js'
@@ -90,9 +91,26 @@ export default async function hostPoolPriceRoutes(fastify: FastifyInstance) {
     } catch (error) { return poolError(error, reply) }
   })
 
-  // 每个池子的「总台数 / 空闲台数」，供定价表与创建页做库存预览
+  // 每个池子的「总台数 / 空闲台数」，供定价表与创建页做库存预览。
+  // 同时列出「没设规格」的单租户机器：它们不属于任何池子、定不了价，定价页要把它们亮出来并就地补规格。
   fastify.get('/inventory', { onRequest: auth }, async (_request, reply) => {
     reply.header('Cache-Control', 'no-store')
-    return { pools: await poolInventory() }
+    const [pools, unspecifiedHosts] = await Promise.all([
+      poolInventory(),
+      prisma.host.findMany({
+        where: { singleTenant: true, OR: [{ resourcePreset: null }, { customerDiskGiB: null }, { cpuAllowanceMax: { lte: 0 } }] },
+        select: { id: true, name: true, architecture: true, machineGroupId: true, regionGroupId: true,
+          machineGroupEntry: { select: { name: true } }, regionGroupEntry: { select: { name: true } } },
+        orderBy: { id: 'asc' }
+      })
+    ])
+    return {
+      pools,
+      unspecified: unspecifiedHosts.map(host => ({
+        id: host.id, name: host.name, architecture: host.architecture,
+        machineGroupId: host.machineGroupId, regionGroupId: host.regionGroupId,
+        machineGroup: host.machineGroupEntry?.name ?? null, regionGroup: host.regionGroupEntry?.name ?? null
+      }))
+    }
   })
 }

@@ -206,7 +206,8 @@ export default {
             "INSTALL_DOWNLOAD_FAILED": "宿主机无法下载面板安装脚本。",
             "TLS_BOOTSTRAP_MISSING": "宿主机尚未回传 Incus TLS 证书。",
             "AGENT_NOT_READY": "未收到 Agent 心跳或协议回执，请检查 Agent 版本和连接后重试。",
-            "ONBOARDING_STEP_FAILED": "当前阶段失败，请检查宿主机后重试。"
+            "ONBOARDING_STEP_FAILED": "当前阶段失败，请检查宿主机后重试。",
+            "HOST_SPEC_INSTANCE_EXCEEDS": "机器上已有的实例超出了这个规格的配额，不能改成这个规格。"
         }
     },
     hostPools: {
@@ -233,6 +234,28 @@ export default {
         loadFailed: '定价加载失败，请刷新重试。',
         orderMax: '一机一卖整单上限',
         orderMaxDesc: '一次付款最多包含的机器台数（含购物车多行合计），超过则拒绝下单。',
+        pricingTab: '定价',
+        flatDescription: '有什么机器就定什么价：每一行是一个由机器自动汇总出来的池子（机型/核心 + 地区 + 磁盘档）。月费留空 = 不卖；初装费填 0 = 不收；价格单位是元。',
+        unspecifiedBanner: '有 {count} 台机器没设规格，不在任何池子里，定不了价。',
+        unspecifiedHint: '选机型/核心和磁盘档，CPU 与内存配额按预设自动算；架构不符的机器不能选。',
+        archMismatch: '架构不符',
+        specPreset: '机型 / 核心',
+        specDisk: '磁盘档',
+        selectAll: '全选',
+        applySpec: '设置规格（{count} 台）',
+        applying: '设置中...',
+        specSaved: '规格已设置，机器已进入池子',
+        specFailed: '设置规格失败',
+        poolsEmpty: '还没有带规格的机器。接入机器并设置规格后，这里会自动出现池子。',
+        colMachine: '机型 / 核心',
+        colRegion: '地区',
+        colDisk: '磁盘档',
+        colStock: '机器',
+        colMonthly: '月费（元）',
+        colSetup: '初装费（元）',
+        colActive: '上架',
+        stockCell: '{idle} 空闲 / {total} 台',
+        noHosts: '0 台（已无机器）',
         continent: {
             'asia-pacific': '亚太地区',
             'north-america': '北美地区',
@@ -243,6 +266,13 @@ export default {
         }
     },
     hostInventory: {
+        "spec": "规格",
+        "batchSpec": "批量设置规格（{count}）",
+        "specTitle": "设置规格",
+        "specHint": "机型/核心决定 CPU 与内存配额，磁盘档决定客户拿到的硬盘大小；设好之后机器才会进入池子，才能定价与出售。",
+        "specMissing": "未设规格，不在任何池子里",
+        "specSaved": "规格已设置",
+        "specArchMismatch": "架构不符，不能设为这个机型：{names}",
         "manageGroups": "管理分组",
         "addMachine": "新增机型分组",
         "addRegion": "新增地区",

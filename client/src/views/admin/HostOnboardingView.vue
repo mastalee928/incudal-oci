@@ -6,11 +6,13 @@ import { useToast } from '@/stores/toast'
 import { availableFlagCountryCodes, getLocalizedCountryName } from '@/utils/countryDisplay'
 import { OnboardingCsvError, parseHostOnboardingCsv } from '@/utils/hostOnboardingCsv'
 import HostInventoryPanel from '@/components/host/HostInventoryPanel.vue'
+import HostPoolPricingPanel from '@/components/host/HostPoolPricingPanel.vue'
 import type { OnboardingBatch, OnboardingCredentials, OnboardingDefaults, OnboardingGatewayStatus, OnboardingNode, OnboardingStatus, OnboardingTargetInput, HostMachineGroup, ResourcePreset } from '@/types/api'
 
 const { t, te, locale } = useI18n()
 const toast = useToast()
-const activeTab = ref<'hosts' | 'tasks'>('hosts')
+// 三个页签：机子池 / 接入任务 / 定价；?tab=pricing 直达定价（旧的「池子定价」菜单跳转到这里）
+const activeTab = ref<'hosts' | 'tasks' | 'pricing'>(new URLSearchParams(window.location.search).get('tab') === 'pricing' ? 'pricing' : 'hosts')
 const inventory = ref<InstanceType<typeof HostInventoryPanel> | null>(null)
 const batches = ref<OnboardingBatch[]>([])
 const gateway = ref<OnboardingGatewayStatus | null>(null)
@@ -247,8 +249,10 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); credential.value = '';
     <div class="flex flex-wrap gap-2" role="tablist" :aria-label="t('onboarding.title')">
       <button type="button" role="tab" :aria-selected="activeTab === 'hosts'" :class="activeTab === 'hosts' ? 'btn-primary' : 'btn-secondary'" @click="activeTab = 'hosts'">{{ t('hostInventory.hostsTab') }}</button>
       <button type="button" role="tab" :aria-selected="activeTab === 'tasks'" :class="activeTab === 'tasks' ? 'btn-primary' : 'btn-secondary'" @click="activeTab = 'tasks'">{{ t('hostInventory.tasksTab') }}</button>
+      <button type="button" role="tab" :aria-selected="activeTab === 'pricing'" :class="activeTab === 'pricing' ? 'btn-primary' : 'btn-secondary'" @click="activeTab = 'pricing'">{{ t('hostPools.pricingTab') }}</button>
     </div>
     <HostInventoryPanel v-if="activeTab === 'hosts'" ref="inventory" />
+    <HostPoolPricingPanel v-else-if="activeTab === 'pricing'" />
     <div v-else class="space-y-4">
       <form class="flex flex-wrap items-center gap-2" @submit.prevent="applySearch">
         <input v-model="search" type="search" class="input flex-1 min-w-0 sm:max-w-sm" maxlength="100" :aria-label="t('common.search')" :placeholder="t('onboarding.searchPlaceholder')" />

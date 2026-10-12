@@ -208,7 +208,8 @@ export default {
             "INSTALL_DOWNLOAD_FAILED": "宿主機無法下載面板安裝指令碼。",
             "TLS_BOOTSTRAP_MISSING": "宿主機尚未回傳 Incus TLS 憑證。",
             "AGENT_NOT_READY": "未收到 Agent 心跳或協定回執，請檢查 Agent 版本與連線後重試。",
-            "ONBOARDING_STEP_FAILED": "目前階段失敗，請檢查宿主機後重試。"
+            "ONBOARDING_STEP_FAILED": "目前階段失敗，請檢查宿主機後重試。",
+            "HOST_SPEC_INSTANCE_EXCEEDS": "機器上已有的實例超出了這個規格的配額，不能改成這個規格。"
         }
     },
     hostPools: {
@@ -235,6 +236,28 @@ export default {
         loadFailed: '定價載入失敗，請重新整理。',
         orderMax: '一機一賣整單上限',
         orderMaxDesc: '一次付款最多包含的機器台數（含購物車多行合計），超過則拒絕下單。',
+        pricingTab: '定價',
+        flatDescription: '有什麼機器就定什麼價：每一行是一個由機器自動彙總出來的池子（機型/核心 + 地區 + 磁碟檔）。月費留空 = 不賣；初裝費填 0 = 不收；價格單位是元。',
+        unspecifiedBanner: '有 {count} 台機器沒設規格，不在任何池子裡，定不了價。',
+        unspecifiedHint: '選機型/核心和磁碟檔，CPU 與記憶體配額按預設自動算；架構不符的機器不能選。',
+        archMismatch: '架構不符',
+        specPreset: '機型 / 核心',
+        specDisk: '磁碟檔',
+        selectAll: '全選',
+        applySpec: '設定規格（{count} 台）',
+        applying: '設定中...',
+        specSaved: '規格已設定，機器已進入池子',
+        specFailed: '設定規格失敗',
+        poolsEmpty: '還沒有帶規格的機器。接入機器並設定規格後，這裡會自動出現池子。',
+        colMachine: '機型 / 核心',
+        colRegion: '地區',
+        colDisk: '磁碟檔',
+        colStock: '機器',
+        colMonthly: '月費（元）',
+        colSetup: '初裝費（元）',
+        colActive: '上架',
+        stockCell: '{idle} 空閒 / {total} 台',
+        noHosts: '0 台（已無機器）',
         continent: {
             'asia-pacific': '亞太地區',
             'north-america': '北美地區',
@@ -245,6 +268,13 @@ export default {
         }
     },
     hostInventory: {
+        "spec": "規格",
+        "batchSpec": "批次設定規格（{count}）",
+        "specTitle": "設定規格",
+        "specHint": "機型/核心決定 CPU 與記憶體配額，磁碟檔決定客戶拿到的硬碟大小；設好之後機器才會進入池子，才能定價與出售。",
+        "specMissing": "未設規格，不在任何池子裡",
+        "specSaved": "規格已設定",
+        "specArchMismatch": "架構不符，不能設為這個機型：{names}",
         "manageGroups": "管理分組",
         "addMachine": "新增機型分組",
         "addRegion": "新增地區",

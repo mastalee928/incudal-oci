@@ -869,7 +869,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       }
     }
     if (packageId === undefined) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '缺少套餐或池子商品'))
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '缺少套餐或商品信息'))
     }
 
     // ==================== 阶段一: 验证与校验 ====================

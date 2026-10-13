@@ -410,6 +410,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             'hosting_market_entry_enabled',
             'aff_rebate_enabled',
             'hosting_notice',
+            'pool_order_max_instances',
             'ticket_enabled',
             'free_site_mode',
             'free_site_register_gift_enabled',
@@ -522,7 +523,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
         ]
         const jsonKeys = ['invite_generation_costs']
         // 数字类型配置键（包括配额配置）
-        const numberKeys = ['smtp_port', 'default_quota_host', 'default_quota_friend', 'default_quota_package', 'free_site_register_gift_points', 'invite_default_expire_days', 'telegram_group_invite_expire_minutes', 'telegram_vip_group_invite_expire_minutes']
+        const numberKeys = ['smtp_port', 'default_quota_host', 'default_quota_friend', 'default_quota_package', 'free_site_register_gift_points', 'invite_default_expire_days', 'telegram_group_invite_expire_minutes', 'telegram_vip_group_invite_expire_minutes', 'pool_order_max_instances']
         const decimalKeys = ['free_site_register_gift_balance', 'telegram_group_min_recharge', 'telegram_group_min_consume', 'telegram_vip_group_min_recharge', 'telegram_vip_group_min_consume']
 
         for (const config of configs) {

@@ -821,7 +821,7 @@ export default {
             pool: {
                 badge: '一机一卖',
                 title: '选择地区与机型，整机独享',
-                description: '每台宿主机只卖给一位客户：CPU、内存、带宽全部归你，全端口直连，按月计费。',
+                description: '每台实例独占一台物理机：CPU、内存、带宽全部归你，全端口直连，按月计费。',
                 regionStep: '选择地区',
                 machineStep: '选择机型 / 核心',
                 diskStep: '选择硬盘',
@@ -834,12 +834,12 @@ export default {
                 createNow: '立即开通',
                 loginToOrder: '登录后开通',
                 loginHint: '登录后会按当前选择直接进入开通流程。',
-                empty: '暂无上架商品。',
-                loadFailed: '商品目录加载失败，请刷新重试。',
+                empty: '暂无可售机型。',
+                loadFailed: '目录加载失败，请刷新重试。',
                 chooseHint: '从左侧选择一个地区开始。',
                 selected: '当前选择',
                 regionsCount: '{count} 个地区',
-                productsCount: '{count} 个商品',
+                productsCount: '{count} 个可售配置',
             },
             summary: {
                 total: '公开套餐',
@@ -864,7 +864,7 @@ export default {
     // 钱包
     cart: {
         title: '购物车',
-        description: '每一行都是一台配置完整的机器，付款时整单一起开通；任何一行缺货整单不扣款。',
+        description: '每一行都是一台配置完整的实例，付款时整单一起开通；任何一行缺货整单不扣款。',
         empty: '购物车是空的。',
         goShopping: '去挑选商品',
         line: {
@@ -875,7 +875,7 @@ export default {
             remove: '移除',
         },
         flags: {
-            offSale: '该商品已下架，请移除后再付款。',
+            offSale: '该配置已下架，请移除后再付款。',
             priceChanged: '价格已变为 ¥{price}，付款按新价计算。',
             stockShort: '库存只剩 {available} 台，请调整数量。',
         },
@@ -886,8 +886,8 @@ export default {
         pay: '付款',
         paying: '付款中...',
         tooMany: '一次最多购买 {max} 台，请减少数量。',
-        notice: '整单全有或全无：任何一台抢不到，整单不扣款。开通失败的机器会自动全额退回余额。',
-        success: '订单已提交，{count} 台机器开始开通',
+        notice: '整单全有或全无：任何一台抢不到，整单不扣款。开通失败的实例会自动全额退回余额。',
+        success: '订单已提交，{count} 台实例开始开通',
         stockShortError: '库存不足，没有扣款。已按剩余数量标出，请调整后重试。',
         priceChangedError: '价格有变动，没有扣款。已刷新为新价，请确认后再付款。',
         nameInvalid: '名称不合法',
@@ -1345,6 +1345,7 @@ export default {
         errorBanner: {
             title: '实例异常',
             description: '实例异常，您可直接销毁（付费实例剩余价值退款不扣除手续费）',
+            retryNow: '立即重试',
             destroyNow: '立即销毁',
             confirmDestroy: '确定要销毁此异常实例吗？付费实例的剩余价值将退款至您的钱包（不扣除手续费）。',
         },
@@ -1426,8 +1427,8 @@ export default {
                 total: '本次应付',
                 none: '无',
                 idle: '可售 {idle} 台',
-                notFound: '商品不存在或已下架，请返回重新选择。',
-                backToMarket: '返回商品目录',
+                notFound: '此配置不存在或已下架，请返回重新选择。',
+                backToMarket: '返回选购列表',
                 selectSystem: '选择系统',
                 selectSshKey: '选择 SSH 密钥',
                 noImages: '该架构暂无可用镜像，请联系管理员。',

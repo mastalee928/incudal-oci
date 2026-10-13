@@ -7,13 +7,13 @@
  */
 export type ContinentCode = 'asia-pacific' | 'north-america' | 'europe' | 'middle-east-africa' | 'south-america' | 'other'
 
-/** 展示顺序，与产品方案里的顺序一致。 */
+/** 展示顺序（产品确认）：北美 → 南美 → 欧洲 → 中东和非洲 → 亚太 → 其他。 */
 export const CONTINENT_ORDER: ContinentCode[] = [
-  'asia-pacific',
   'north-america',
+  'south-america',
   'europe',
   'middle-east-africa',
-  'south-america',
+  'asia-pacific',
   'other'
 ]
 

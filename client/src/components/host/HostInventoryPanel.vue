@@ -22,6 +22,7 @@ const stock = ref<ManagedHost['stock'] | ''>('')
 const groups = ref<HostMachineGroup[]>([])
 const regions = computed(() => groups.value.find(group => group.id === machineGroup.value)?.regions || [])
 const summary = ref<HostStockCounts>({ total: 0, available: 0, assigned: 0, unavailable: 0 })
+const sellableCount = ref(0)
 const ungrouped = ref<HostStockCounts>({ total: 0, available: 0, assigned: 0, unavailable: 0 })
 const loading = ref(true)
 const failed = ref(false)
@@ -83,6 +84,7 @@ async function refresh() {
     if (disposed || current !== sequence) return
     hosts.value = result.hosts; total.value = result.total
     groups.value = result.groups; summary.value = result.summary; ungrouped.value = result.ungrouped
+    sellableCount.value = result.sellable ?? 0
     selected.value = selected.value.filter(id => result.hosts.some(host => host.id === id))
     failed.value = false
     if (page.value > pages.value) { page.value = pages.value; void refresh() }
@@ -160,7 +162,7 @@ defineExpose({ refresh })
 <template>
   <section class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-sm text-themed">{{ t('hostInventory.stockSummary', summary) }}</p>
+      <p class="text-sm text-themed">{{ t('hostInventory.stockSummary', summary) }} · <span class="text-green-600 dark:text-green-400">{{ t('hostInventory.sellableHint', { sellable: sellableCount }) }}</span></p>
       <button class="btn-secondary whitespace-nowrap" @click="showGroupManager = true">{{ t('hostInventory.manageGroups') }}</button>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -218,6 +220,7 @@ defineExpose({ refresh })
           <PortProtocolBadge :value="host.portProtocol" />
           <p class="text-xs text-themed-muted">{{ t('hostInventory.instances', { count: host.instanceCount }) }}</p>
           <p class="text-xs font-medium" :class="host.stock === 'available' ? 'text-green-600 dark:text-green-400' : 'text-themed-muted'">{{ t('hostInventory.stock.' + host.stock) }}</p>
+          <p v-if="host.sellReason" class="text-xs font-medium text-amber-600 dark:text-amber-400">{{ t('hostInventory.sellReason.' + host.sellReason) }}</p>
           <p v-for="instance in host.instances" :key="instance.id" class="text-xs text-themed break-words">{{ instance.user.username }} · {{ instance.name }} (#{{ instance.id }})</p>
         </div>
         <div class="col-start-2 xl:col-start-auto flex flex-wrap gap-2 xl:max-w-48 xl:justify-end">

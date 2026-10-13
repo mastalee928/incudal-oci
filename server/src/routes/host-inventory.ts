@@ -7,6 +7,7 @@ import { presetQuota } from '../lib/onboarding-resources.js'
 import { portProtocolSelect, portProtocolView } from '../services/host-port-protocol.js'
 import { lockHostGroups, resolveHostGroups, type HostGroupInput } from '../services/host-groups.js'
 import { HOST_OCCUPIED_INSTANCE_WHERE } from '../lib/host-resource-usage.js'
+import { poolKeyOf, poolKeyString, priceKeyOf, unsellableReason, type UnsellableReason } from '../lib/pool-stock.js'
 
 const occupied = HOST_OCCUPIED_INSTANCE_WHERE
 const count = () => ({ total: 0, available: 0, assigned: 0, unavailable: 0 })
@@ -44,21 +45,37 @@ export default async function hostInventoryRoutes(fastify: FastifyInstance) {
       ] } : {})
     }
     // A compact snapshot makes counts independent of the current page and search.
-    const [inventory, groups, moves] = await Promise.all([
-      prisma.host.findMany({ select: { id: true, machineGroupId: true, regionGroupId: true, status: true, isInstalled: true,
+    const [inventory, groups, moves, priceRows] = await Promise.all([
+      prisma.host.findMany({ select: { id: true, machineGroupId: true, regionGroupId: true, resourcePreset: true, customerDiskGiB: true, singleTenant: true, status: true, isInstalled: true,
         _count: { select: { instances: { where: occupied } } }, onboardingNode: { select: { status: true } }, agent: { select: { enabled: true, lastSeenAt: true } } } }),
       prisma.hostMachineGroup.findMany({ orderBy: { id: 'asc' }, include: { regions: { orderBy: { id: 'asc' } } } }),
-      prisma.instanceTask.findMany({ where: { taskType: 'change_host', status: { in: ['PENDING', 'PROCESSING'] }, targetHostId: { not: null } }, select: { targetHostId: true } })
+      prisma.instanceTask.findMany({ where: { taskType: 'change_host', status: { in: ['PENDING', 'PROCESSING'] }, targetHostId: { not: null } }, select: { targetHostId: true } }),
+      prisma.hostPoolPrice.findMany({ where: { active: true }, select: { machineGroupId: true, resourcePreset: true, regionGroupId: true, diskGiB: true } })
     ])
+    // 「真正可售」与客户公开目录同一套判据：有定价行 + 单租户 + 就绪 + 未占用 + 已设规格。
+    // 只按「在线空闲」判定会让人以为机器能卖，其实客户侧对不上池子。
+    const pricedPoolKeys = new Set(priceRows.map(price => priceKeyOf(price)))
     const summary = count(), ungrouped = count()
     const machineCounts = new Map<number, Counts>(), regionCounts = new Map<number, Counts>()
     const stateById = new Map<number, StockState>()
+    const reasonById = new Map<number, UnsellableReason | null>()
     const increment = (target: Counts, state: StockState) => { target.total++; target[state]++ }
     const reserved = new Set(moves.map(task => task.targetHostId))
     for (const host of inventory) {
       const state = host._count.instances === 0 && reserved.has(host.id) ? 'unavailable' : stockState(host)
       stateById.set(host.id, state)
       increment(summary, state)
+      const agentSeen = host.agent?.lastSeenAt ?? null
+      const onboarded = host.onboardingNode === null || (host.onboardingNode.status === 'succeeded' &&
+        Boolean(host.agent?.enabled) && agentSeen !== null && Date.now() - agentSeen.getTime() < 90000)
+      reasonById.set(host.id, unsellableReason({
+        occupied: host._count.instances > 0,
+        resourcePreset: host.resourcePreset,
+        customerDiskGiB: host.customerDiskGiB,
+        singleTenant: host.singleTenant,
+        ready: host.status === 'online' && host.isInstalled && onboarded,
+        hasPrice: pricedPoolKeys.has(poolKeyString(poolKeyOf(host)))
+      }))
       if (host.machineGroupId === null) increment(ungrouped, state)
       else {
         if (!machineCounts.has(host.machineGroupId)) machineCounts.set(host.machineGroupId, count())
@@ -94,12 +111,12 @@ export default async function hostInventoryRoutes(fastify: FastifyInstance) {
         machineGroup: host.machineGroupEntry?.name || host.machineGroup, regionGroup: host.regionGroupEntry?.name || host.regionGroup,
         machineGroupId: host.machineGroupId, regionGroupId: host.regionGroupId,
         architecture: host.architecture, status: host.status, isInstalled: host.isInstalled,
-        instanceCount: host.instances.length, instances: host.instances, stock: stateById.get(host.id) || 'unavailable',
+        instanceCount: host.instances.length, instances: host.instances, stock: stateById.get(host.id) || 'unavailable', sellReason: reasonById.get(host.id) ?? null,
         resourcePreset: host.resourcePreset, customerDiskGiB: host.customerDiskGiB, cpuAllowanceMax: host.cpuAllowanceMax,
         memoryMax: host.memoryMax, storageSize: host.storageSize, resourceSnapshot: host.resourceSnapshot, singleTenant: host.singleTenant,
         portProtocol: portProtocolView(host), agentLastSeenAt: host.agent?.lastSeenAt || null
       }
-    }), total, page, pageSize: 20, summary, ungrouped,
+    }), total, page, pageSize: 20, summary, ungrouped, sellable: [...reasonById.values()].filter(reason => reason === null).length,
     groups: groups.map(group => ({ ...group, counts: machineCounts.get(group.id) || count(),
       regions: group.regions.map(region => ({ ...region, counts: regionCounts.get(region.id) || count() })) })),
     machineGroups: groups.map(group => group.name), regionGroups: [...new Set(groups.flatMap(group => group.regions.map(region => region.name)))] }

@@ -819,7 +819,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       prisma.hostPoolPrice.findMany({
         where: { active: true },
         select: {
-          id: true, resourcePreset: true, diskGiB: true, monthlyPrice: true, setupFee: true,
+          id: true, machineGroupId: true, resourcePreset: true, diskGiB: true, monthlyPrice: true, setupFee: true,
           regionGroup: { select: { id: true, name: true, countryCode: true } }
         },
         orderBy: [{ resourcePreset: 'asc' }, { diskGiB: 'asc' }, { id: 'asc' }]
@@ -829,6 +829,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
 
     interface CatalogProduct {
       id: number
+      machineGroupId: number
       resourcePreset: string
       diskGiB: number
       monthlyPrice: number
@@ -848,10 +849,13 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         byRegion.set(region.id, entry)
       }
       const quota = presetQuota(price.resourcePreset as ResourcePreset)
+      // 四元组全等（含机型分组）才认库存：机型分组不同就是另一个商品，不能互相顶替。
       const stock = pools.find(pool =>
-        pool.regionGroupId === region.id && pool.resourcePreset === price.resourcePreset && pool.diskGiB === price.diskGiB)
+        pool.machineGroupId === price.machineGroupId && pool.regionGroupId === region.id &&
+        pool.resourcePreset === price.resourcePreset && pool.diskGiB === price.diskGiB)
       entry.products.push({
         id: price.id,
+        machineGroupId: price.machineGroupId,
         resourcePreset: price.resourcePreset,
         diskGiB: price.diskGiB,
         monthlyPrice: Number(price.monthlyPrice),

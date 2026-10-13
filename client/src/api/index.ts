@@ -970,7 +970,8 @@ const api = {
     // 一机一卖多台订单：购物车结算与「直接付款」共用；整单全有或全无
     poolOrder: (data: {
       items: Array<{ poolPriceId: number; quantity: number; namePrefix: string; image: string; customInitCommandIds?: number[] }>
-      sshKeyId: number
+      /** 可选：不传即「仅密码」下单，密码在响应里返回。 */
+      sshKeyId?: number | null
       expectedTotal: number
     }): Promise<{
       batchId: string

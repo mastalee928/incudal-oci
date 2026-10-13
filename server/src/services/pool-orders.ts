@@ -44,7 +44,8 @@ export interface PoolOrderItemInput {
 
 export interface PoolOrderInput {
   items: PoolOrderItemInput[]
-  sshKeyId: number
+  /** SSH 密钥可选：缺省即「仅密码」下单，密码由系统生成并在响应里返回。 */
+  sshKeyId?: number | null
   /** 前端按购物车展示价算出的整单总额（分），用于拦住「加购后改价」。 */
   expectedTotal: number
 }
@@ -233,11 +234,15 @@ interface CreatedInstance {
 }
 
 export async function placePoolOrder(userId: number, username: string, input: PoolOrderInput): Promise<PoolOrderResult> {
-  const keyRecord = await db.getSSHKeyById(input.sshKeyId)
-  if (!keyRecord || keyRecord.user_id !== userId) {
-    throw new PoolOrderError(ErrorCode.SSH_KEY_NOT_OWNED, 'SSH 密钥不存在或不属于当前用户')
+  // SSH 密钥可选：不传则只按系统生成的密码开通（客户从响应里拿到 rootPassword）。
+  let sshKey = ''
+  if (input.sshKeyId !== undefined && input.sshKeyId !== null) {
+    const keyRecord = await db.getSSHKeyById(input.sshKeyId)
+    if (!keyRecord || keyRecord.user_id !== userId) {
+      throw new PoolOrderError(ErrorCode.SSH_KEY_NOT_OWNED, 'SSH 密钥不存在或不属于当前用户')
+    }
+    sshKey = keyRecord.public_key
   }
-  const sshKey = keyRecord.public_key
 
   const { items, totalYuan, totalCount } = await prepareOrder(userId, input, sshKey)
   const batchId = batchIdGen()
@@ -322,7 +327,7 @@ export async function placePoolOrder(userId: number, username: string, input: Po
                 portLimit: item.plan.portLimit,
                 nested: Boolean(item.pkg.nested),
                 privileged: Boolean(item.pkg.privileged),
-                sshPublicKey: sshKey,
+                sshPublicKey: sshKey || null,
                 nodeSelectors: [],
                 billingMode: 'package',
                 packagePlanId: item.plan.id,

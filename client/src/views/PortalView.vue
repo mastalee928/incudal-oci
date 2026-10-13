@@ -2,8 +2,8 @@
 /**
  * 落地页 / 门户页（一机一卖）
  *
- * 展示在售的池子商品：一台宿主机只卖给一位客户，整机独享。
- * 数据源与购买页相同（/packages/public/catalog），只挑选最便宜的几个做橱窗。
+ * 上半是品牌与能力介绍，下半直接内嵌购买向导（与购买页同一套：洲 → 国家 → 机型 →
+ * 核心 → 硬盘 → 镜像 → 凭据 → 付款）。数据源：/packages/public/catalog。
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -13,14 +13,8 @@ import { usePageSeo } from '@/composables/usePageSeo'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
-import FlagIcon from '@/components/FlagIcon.vue'
-import {
-  formatMemoryMiB,
-  formatPublicPrice,
-  presetLabel,
-  type PoolCatalogProduct,
-  type PoolCatalogRegion
-} from '@/utils/publicCatalog'
+import PoolPurchaseWizard from '@/components/purchase/PoolPurchaseWizard.vue'
+import { formatPublicPrice } from '@/utils/publicCatalog'
 
 defineOptions({
   name: 'PortalView'
@@ -32,58 +26,27 @@ const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const brand = useBrand()
 
-const regions = ref<PoolCatalogRegion[]>([])
+const regions = ref<Array<{ products: Array<{ monthlyPrice: number; resourcePreset: string }> }>>([])
 const loading = ref(true)
 
-interface SpotlightProduct {
-  product: PoolCatalogProduct
-  region: PoolCatalogRegion
-}
-
-/** 全部在售商品（扁平化），橱窗从中挑最便宜的四个。 */
-const allProducts = computed<SpotlightProduct[]>(() => {
-  const flattened: SpotlightProduct[] = []
-  for (const region of regions.value) {
-    for (const product of region.products) {
-      flattened.push({ product, region })
-    }
-  }
-  return flattened
-})
-
-const spotlightProducts = computed<SpotlightProduct[]>(() => {
-  const inStock = allProducts.value.filter(item => item.product.idle > 0)
-  const pool = inStock.length > 0 ? inStock : allProducts.value
-  return [...pool]
-    .sort((left, right) => left.product.monthlyPrice - right.product.monthlyPrice)
-    .slice(0, 4)
-})
+const allProducts = computed(() => regions.value.flatMap(region => region.products))
 
 const minMonthlyPrice = computed<number | null>(() => {
   if (allProducts.value.length === 0) return null
-  return allProducts.value.reduce((min, item) => Math.min(min, item.product.monthlyPrice), allProducts.value[0].product.monthlyPrice)
+  return allProducts.value.reduce((min, product) => Math.min(min, product.monthlyPrice), allProducts.value[0].monthlyPrice)
 })
 
 const statCards = computed(() => [
   { label: t('publicSite.market.summary.regions'), value: String(regions.value.length) },
   { label: t('publicSite.market.summary.total'), value: String(allProducts.value.length) },
-  { label: t('hostPools.core'), value: String(new Set(allProducts.value.map(item => item.product.resourcePreset)).size) },
+  { label: t('hostPools.core'), value: String(new Set(allProducts.value.map(product => product.resourcePreset)).size) },
   { label: t('hostPools.monthlyPrice'), value: minMonthlyPrice.value === null ? '-' : `¥${formatPublicPrice(minMonthlyPrice.value)}` }
 ])
 
 const platformCards = computed(() => [
-  {
-    title: t('publicSite.portal.experienceNoLoginTitle'),
-    description: t('publicSite.portal.experienceNoLoginDescription')
-  },
-  {
-    title: t('publicSite.portal.experienceRoutingTitle'),
-    description: t('publicSite.portal.experienceRoutingDescription')
-  },
-  {
-    title: t('publicSite.portal.experienceThemeTitle'),
-    description: t('publicSite.portal.experienceThemeDescription')
-  }
+  { title: t('publicSite.portal.experienceNoLoginTitle'), description: t('publicSite.portal.experienceNoLoginDescription') },
+  { title: t('publicSite.portal.experienceRoutingTitle'), description: t('publicSite.portal.experienceRoutingDescription') },
+  { title: t('publicSite.portal.experienceThemeTitle'), description: t('publicSite.portal.experienceThemeDescription') }
 ])
 
 const consoleActionLabel = computed(() => (
@@ -105,10 +68,7 @@ const ui = computed(() => themeStore.isDark
       terminalCard: 'border border-gray-800 bg-black text-gray-300', terminalMeta: 'text-gray-600',
       platformCard: 'border border-gray-800 bg-gray-900 text-gray-100', platformTitle: 'text-gray-100', platformBody: 'text-gray-400',
       sectionLabel: 'text-gray-500', sectionBody: 'text-gray-400',
-      browseWrap: 'border border-gray-800 bg-gray-950', browseCard: 'border border-gray-800 hover:border-gray-700',
-      emptyState: 'border-gray-800 bg-gray-950 text-gray-500', skeleton: 'bg-gray-800',
-      chipStock: 'border border-emerald-400/40 text-emerald-300',
-      chipSoldOut: 'border border-red-400/40 text-red-300'
+      browseWrap: 'border border-gray-800 bg-gray-950', skeleton: 'bg-gray-800'
     }
   : {
       badge: 'border-gray-200 bg-white text-gray-600', body: 'text-gray-600',
@@ -120,10 +80,7 @@ const ui = computed(() => themeStore.isDark
       terminalCard: 'border border-gray-800 bg-gray-950 text-gray-200', terminalMeta: 'text-gray-500',
       platformCard: 'border border-gray-200 bg-gray-50 text-gray-900', platformTitle: 'text-gray-900', platformBody: 'text-gray-600',
       sectionLabel: 'text-gray-500', sectionBody: 'text-gray-600',
-      browseWrap: 'border border-gray-200 bg-gray-50', browseCard: 'border border-gray-200 hover:border-gray-300 hover:shadow-sm',
-      emptyState: 'border-gray-300 bg-white text-gray-500', skeleton: 'bg-gray-200',
-      chipStock: 'border border-emerald-600/40 text-emerald-700',
-      chipSoldOut: 'border border-red-600/40 text-red-700'
+      browseWrap: 'border border-gray-200 bg-gray-50', skeleton: 'bg-gray-200'
     }
 )
 
@@ -134,46 +91,20 @@ usePageSeo(() => ({
   keywords: t('publicSite.seo.keywords').replace(/Incudal/g, brand.brandName)
 }))
 
-function productPriceLabel(item: SpotlightProduct): string {
-  return t('publicSite.market.fromMonthly', { price: formatPublicPrice(item.product.monthlyPrice) })
-}
-
-function productSpecLabel(item: SpotlightProduct): string {
-  return t('publicSite.market.pool.spec', {
-    cpu: item.product.cpu,
-    memory: formatMemoryMiB(item.product.memoryMiB),
-    disk: item.product.diskGiB
-  })
-}
-
 function browseCatalog(): void {
   void router.push({ path: '/market' })
 }
 
-function openProduct(item: SpotlightProduct): void {
-  void router.push({
-    path: '/market',
-    query: {
-      region: String(item.region.id),
-      preset: item.product.resourcePreset,
-      product: String(item.product.id)
-    }
-  })
-}
-
 function goToConsole(): void {
   if (authStore.isAuthenticated) {
-    const target = authStore.isAdmin ? '/admin/users' : '/dashboard'
-    void router.push(target)
+    void router.push(authStore.isAdmin ? '/admin/users' : '/dashboard')
     return
   }
-
   void router.push('/login')
 }
 
 async function loadCatalog(): Promise<void> {
   loading.value = true
-
   try {
     const response = await api.packages.getPublicCatalog()
     regions.value = response.regions || []
@@ -185,9 +116,7 @@ async function loadCatalog(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  void loadCatalog()
-})
+onMounted(() => { void loadCatalog() })
 </script>
 
 <template>
@@ -195,10 +124,7 @@ onMounted(() => {
     <section class="relative px-4 pb-20 pt-14 sm:px-6 lg:px-8">
       <div class="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <div class="max-w-3xl">
-          <div
-            class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium"
-            :class="ui.badge"
-          >
+          <div class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium" :class="ui.badge">
             <span class="h-1.5 w-1.5 rounded-lg" :class="themeStore.isDark ? 'bg-[#a8c7fa]' : 'bg-[#0b57d0]'"></span>
             {{ t('publicSite.market.pool.badge') }}
           </div>
@@ -211,71 +137,39 @@ onMounted(() => {
           </p>
 
           <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button
-              class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-4"
-              :class="ui.primaryButton"
-              @click="browseCatalog()"
-            >
+            <button class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-4" :class="ui.primaryButton" @click="browseCatalog()">
               <span>{{ t('publicSite.actions.browseProducts') }}</span>
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5l6 6m0 0l-6 6m6-6h-15" />
               </svg>
             </button>
-
-            <button
-              class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4"
-              :class="ui.secondaryButton"
-              @click="goToConsole"
-            >
+            <button class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4" :class="ui.secondaryButton" @click="goToConsole">
               <span class="sm:hidden">{{ consoleActionCompactLabel }}</span>
               <span class="hidden sm:inline">{{ consoleActionLabel }}</span>
             </button>
           </div>
 
           <div class="mt-10 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <div
-              v-for="item in statCards"
-              :key="item.label"
-              class="rounded-lg px-4 py-4 transition-shadow duration-150"
-              :class="ui.statCard"
-            >
-              <div class="text-xs font-medium" :class="ui.statLabel">
-                {{ item.label }}
-              </div>
-              <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.statValue">
-                {{ item.value }}
-              </div>
+            <div v-for="item in statCards" :key="item.label" class="rounded-lg px-4 py-4 transition-shadow duration-150" :class="ui.statCard">
+              <div class="text-xs font-medium" :class="ui.statLabel">{{ item.label }}</div>
+              <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.statValue">{{ item.value }}</div>
             </div>
           </div>
         </div>
 
         <div class="relative">
-          <div
-            class="relative overflow-hidden rounded-xl p-6"
-            :class="ui.previewCard"
-          >
+          <div class="relative overflow-hidden rounded-xl p-6" :class="ui.previewCard">
             <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div class="text-xs font-medium" :class="ui.previewLabel">
-                  {{ t('publicSite.portal.previewLabel') }}
-                </div>
-                <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.previewTitle">
-                  {{ t('publicSite.portal.previewTitle') }}
-                </div>
+                <div class="text-xs font-medium" :class="ui.previewLabel">{{ t('publicSite.portal.previewLabel') }}</div>
+                <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.previewTitle">{{ t('publicSite.portal.previewTitle') }}</div>
               </div>
-
-              <button
-                class="h-10 rounded-lg px-5 text-sm font-medium transition-colors duration-150"
-                :class="ui.previewButton"
-                @click="browseCatalog()"
-              >
+              <button class="h-10 rounded-lg px-5 text-sm font-medium transition-colors duration-150" :class="ui.previewButton" @click="browseCatalog()">
                 {{ t('publicSite.actions.viewCatalog') }}
               </button>
             </div>
 
-            <p class="mt-4 text-sm leading-6" :class="ui.previewBody">
-              {{ t('publicSite.portal.previewDescription') }}
-            </p>
+            <p class="mt-4 text-sm leading-6" :class="ui.previewBody">{{ t('publicSite.portal.previewDescription') }}</p>
 
             <div class="mt-6 rounded-lg p-5 font-mono text-xs leading-6" :class="ui.terminalCard">
               <div class="flex flex-wrap items-center justify-between gap-2">
@@ -290,18 +184,9 @@ onMounted(() => {
             </div>
 
             <div class="mt-6 grid gap-3 sm:grid-cols-3">
-              <div
-                v-for="card in platformCards"
-                :key="card.title"
-                class="rounded-lg p-4 transition-colors duration-150"
-                :class="ui.platformCard"
-              >
-                <div class="text-sm font-medium" :class="ui.platformTitle">
-                  {{ card.title }}
-                </div>
-                <p class="mt-2 text-xs leading-5" :class="ui.platformBody">
-                  {{ card.description }}
-                </p>
+              <div v-for="card in platformCards" :key="card.title" class="rounded-lg p-4 transition-colors duration-150" :class="ui.platformCard">
+                <div class="text-sm font-medium" :class="ui.platformTitle">{{ card.title }}</div>
+                <p class="mt-2 text-xs leading-5" :class="ui.platformBody">{{ card.description }}</p>
               </div>
             </div>
           </div>
@@ -310,92 +195,17 @@ onMounted(() => {
     </section>
 
     <section class="px-4 pb-20 sm:px-6 lg:px-8">
-      <div
-        class="mx-auto max-w-7xl rounded-xl px-6 py-10 sm:px-10"
-        :class="ui.browseWrap"
-      >
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div class="max-w-2xl">
-            <div class="text-xs font-medium" :class="ui.sectionLabel">
-              {{ t('publicSite.portal.browseLabel') }}
-            </div>
-            <h2 class="mt-4 text-3xl font-normal tracking-[-0.02em] sm:text-[2.25rem] sm:leading-[1.15]">
-              {{ t('publicSite.market.pool.title') }}
-            </h2>
-            <p class="mt-4 text-base leading-7" :class="ui.sectionBody">
-              {{ t('publicSite.market.pool.description') }}
-            </p>
-            <p class="mt-2 text-sm" :class="ui.sectionLabel">
-              {{ t('publicSite.market.pool.regionsCount', { count: regions.length }) }} · {{ t('publicSite.market.pool.productsCount', { count: allProducts.length }) }}
-            </p>
-          </div>
-
-          <button
-            class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-4"
-            :class="ui.primaryButton"
-            @click="browseCatalog()"
-          >
-            {{ t('publicSite.actions.browseProducts') }}
-          </button>
+      <div class="mx-auto max-w-7xl rounded-xl px-6 py-10 sm:px-10" :class="ui.browseWrap">
+        <div class="max-w-2xl">
+          <div class="text-xs font-medium" :class="ui.sectionLabel">{{ t('publicSite.portal.browseLabel') }}</div>
+          <h2 class="mt-4 text-3xl font-normal tracking-[-0.02em] sm:text-[2.25rem] sm:leading-[1.15]">{{ t('publicSite.market.pool.title') }}</h2>
+          <p class="mt-4 text-base leading-7" :class="ui.sectionBody">{{ t('publicSite.market.pool.description') }}</p>
+          <p class="mt-2 text-sm" :class="ui.sectionLabel">
+            {{ t('publicSite.market.pool.regionsCount', { count: regions.length }) }} · {{ t('publicSite.market.pool.productsCount', { count: allProducts.length }) }}
+          </p>
         </div>
-
-        <div class="mt-8 grid gap-4 lg:grid-cols-2">
-          <template v-if="loading">
-            <div
-              v-for="index in 4"
-              :key="index"
-              class="h-40 animate-pulse rounded-xl"
-              :class="ui.skeleton"
-            ></div>
-          </template>
-
-          <template v-else-if="spotlightProducts.length > 0">
-            <button
-              v-for="item in spotlightProducts"
-              :key="item.product.id"
-              class="flex flex-col gap-4 rounded-lg p-5 text-left transition-[background-color,box-shadow] duration-150 sm:flex-row sm:items-start sm:justify-between"
-              :class="[ui.browseCard, themeStore.isDark ? 'bg-gray-950 hover:bg-gray-900' : 'bg-white hover:bg-gray-50']"
-              @click="openProduct(item)"
-            >
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
-                    :class="item.product.idle > 0 ? ui.chipStock : ui.chipSoldOut"
-                  >
-                    {{ item.product.idle > 0 ? t('publicSite.market.pool.idle', { idle: item.product.idle }) : t('publicSite.market.pool.soldOut') }}
-                  </span>
-                  <span class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]" :class="ui.badge">
-                    {{ presetLabel(item.product.resourcePreset) }}
-                  </span>
-                </div>
-                <div class="mt-3 flex items-center gap-2 text-lg font-medium" :class="ui.previewTitle">
-                  <FlagIcon v-if="item.region.countryCode" :code="item.region.countryCode" size="xs" />
-                  <span class="truncate">{{ item.region.name }}</span>
-                </div>
-                <div class="mt-2 text-sm leading-5" :class="ui.sectionBody">
-                  {{ productSpecLabel(item) }}
-                </div>
-              </div>
-
-              <div class="sm:shrink-0 sm:text-right">
-                <div class="text-sm font-medium">
-                  {{ productPriceLabel(item) }}
-                </div>
-                <div class="mt-1 text-xs" :class="ui.statLabel">
-                  {{ item.product.diskGiB }} GiB
-                </div>
-              </div>
-            </button>
-          </template>
-
-          <div
-            v-else
-            class="rounded-lg border border-dashed px-4 py-8 text-center text-sm"
-            :class="ui.emptyState"
-          >
-            {{ t('publicSite.market.pool.empty') }}
-          </div>
+        <div class="mt-8">
+          <PoolPurchaseWizard embedded />
         </div>
       </div>
     </section>

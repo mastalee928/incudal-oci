@@ -41,7 +41,6 @@ import SSHKeyGenerationPromptModal from '@/components/SSHKeyGenerationPromptModa
 import GeneratedSshKeyModal from '@/components/GeneratedSshKeyModal.vue'
 import type { Package, UserQuota, AvailableHost, CreateInstanceRequest } from '@/types/api'
 import {
-  architectureOfPreset,
   buildPoolInstanceNames,
   formatMemoryMiB,
   formatPublicPrice,
@@ -532,75 +531,16 @@ const selectedHostingZone = computed<HostingZoneTab | null>(() => {
   return hostingZones.value.find(zone => zone.id === zoneId) || null
 })
 
-/**
- * 池子模式：按 poolPriceId 从公开目录里找到商品，再按机型架构筛镜像。
- * 目录接口未登录也可访问，复用它就不需要再为创建页加一个专门的查询接口。
- */
-async function loadPoolProduct(): Promise<void> {
-  try {
-    const [, catalog] = await Promise.all([
-      resourcesStore.loadSshKeys(),
-      api.packages.getPublicCatalog()
-    ])
-
-    for (const region of catalog.regions || []) {
-      const product = region.products.find(item => item.id === poolPriceId.value)
-      if (product) {
-        poolProduct.value = product
-        poolRegion.value = region
-        break
-      }
-    }
-
-    if (!poolProduct.value) {
-      poolNotFound.value = true
-      return
-    }
-
-    if (sshKeys.value.length > 0) {
-      form.value.sshKeyId = sshKeys.value[0].id
-    }
-    await loadPoolImages(poolProduct.value)
-  } catch (err: any) {
-    error.value = t('instance.createPage.loadFailed') + ': ' + (err?.message || String(err))
-  } finally {
-    loading.value = false
-  }
-}
-
-/**
- * 客户不能指定机器，所以镜像由机型决定：E2 只列 x86_64，ARM 只列 aarch64，且只列可见的。
- * 内存传池子的配额，让 128MB 那条「只许 Alpine/Debian」的规则照常生效。
- */
-async function loadPoolImages(product: PoolCatalogProduct): Promise<void> {
-  imagesLoading.value = true
-  try {
-    const architecture = architectureOfPreset(product.resourcePreset)
-    const res = await api.images.getSystemImages('container', product.memoryMiB)
-    const images = (res.images || [])
-      .filter(img => img.architecture === architecture)
-      .map(img => ({
-        value: img.remoteAlias,
-        label: img.name,
-        icon: img.icon || getDistroFromName(img.name)
-      }))
-    availableImages.value = images
-    form.value.image = images[0]?.value ?? ''
-  } catch (_err) {
-    availableImages.value = []
-    form.value.image = ''
-  } finally {
-    imagesLoading.value = false
-  }
-}
+// （池子下单已统一走向导，创建页不再承载池子模式；相关加载函数已移除。）
 
 onMounted(async (): Promise<void> => {
-  await configStore.loadPublicConfig()
-
+  // 池子下单已统一走向导（购买页 / 首页）；旧的 ?poolPriceId= 链接重定向过去。
   if (isPoolMode.value) {
-    await loadPoolProduct()
+    void router.replace({ name: 'market', query: poolPriceId.value ? { product: String(poolPriceId.value) } : {} })
     return
   }
+
+  await configStore.loadPublicConfig()
 
   try {
     // 分享链接中的托管区域必须在解析来源前加载完成，否则冷启动时会被误判为官方来源。

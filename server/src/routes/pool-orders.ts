@@ -20,7 +20,7 @@ export default async function poolOrderRoutes(fastify: FastifyInstance) {
       body: {
         type: 'object',
         additionalProperties: false,
-        required: ['items', 'sshKeyId', 'expectedTotal'],
+        required: ['items', 'expectedTotal'],
         properties: {
           items: {
             type: 'array',
@@ -39,7 +39,7 @@ export default async function poolOrderRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          sshKeyId: { type: 'integer', minimum: 1 },
+          sshKeyId: { type: ['integer', 'null'], minimum: 1 },
           expectedTotal: { type: 'integer', minimum: 0 }
         }
       }

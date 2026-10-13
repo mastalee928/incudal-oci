@@ -879,6 +879,8 @@ export interface ManagedHost {
   resourceSnapshot: ResolvedHostResources | null
   singleTenant: boolean
   stock: 'available' | 'assigned' | 'unavailable'
+  /** 不可售原因（可售时为 null）：assigned/no-spec/not-single-tenant/not-ready/no-price */
+  sellReason?: string | null
   instances: Array<{ id: number; name: string; status: string; cpu: number; memory: number; disk: number; user: { id: number; username: string } }>
 }
 export interface HostStockCounts { total: number; available: number; assigned: number; unavailable: number }
@@ -894,6 +896,8 @@ export interface HostInventoryResponse {
   groups: HostMachineGroup[]
   summary: HostStockCounts
   ungrouped: HostStockCounts
+  /** 真正可售台数（与客户公开目录同一套判据） */
+  sellable: number
 }
 export interface HostInventoryQuery {
   page?: number

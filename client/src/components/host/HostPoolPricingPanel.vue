@@ -30,9 +30,9 @@ const loading = ref(true)
 const loadFailed = ref(false)
 const saving = ref(false)
 
-// 编辑缓冲：按池子键存元的字符串与上架开关。留空 = 不卖。
-const monthly = ref<Record<string, string>>({})
-const setup = ref<Record<string, string>>({})
+// 编辑缓冲：按池子键存「元」的输入值（type="number" 的 v-model 会存成 number，见 bufferText）与上架开关。留空 = 不卖。
+const monthly = ref<Record<string, string | number>>({})
+const setup = ref<Record<string, string | number>>({})
 const active = ref<Record<string, boolean>>({})
 
 // 补规格表单
@@ -100,6 +100,13 @@ const specAllSelected = computed({
 })
 
 const centsToYuan = (cents: number) => (cents ? String(cents / 100) : '')
+/**
+ * 输入框缓冲统一取文本。type="number" 的 v-model 会把输入自动存成 number（Vue 的 looseToNumber），
+ * 直接对它调 .trim() 会抛 TypeError；渲染函数一抛错，Vue 会把整个面板的子树替换成空注释节点（页面变空白）。
+ * 所以读取缓冲一律经过这里，且不要对缓冲值直接调字符串方法。
+ */
+const bufferText = (value: string | number | null | undefined): string =>
+  value === null || value === undefined ? '' : String(value).trim()
 function yuanToCents(value: string): number | null {
   const trimmed = value.trim()
   if (!trimmed) return null
@@ -164,8 +171,8 @@ async function save() {
   const items: HostPoolPriceInput[] = []
   const removals: number[] = []
   for (const row of rows.value) {
-    const monthlyText = (monthly.value[row.key] ?? '').trim()
-    const setupText = (setup.value[row.key] ?? '').trim()
+    const monthlyText = bufferText(monthly.value[row.key])
+    const setupText = bufferText(setup.value[row.key])
     const monthlyCents = yuanToCents(monthlyText)
     const setupCents = yuanToCents(setupText)
     if (monthlyText && monthlyCents === null) { toast.error(t('hostPools.invalidPrice')); return }
@@ -276,7 +283,7 @@ onMounted(() => void load())
                   <input v-model="setup[row.key]" type="number" min="0" step="0.01" inputmode="decimal" class="input w-28" :placeholder="t('hostPools.freeSetup')" :aria-label="`${row.regionName} ${row.diskGiB} GiB ${t('hostPools.setupFee')}`" />
                 </td>
                 <td class="px-3 py-2">
-                  <input v-model="active[row.key]" type="checkbox" :disabled="!(monthly[row.key] ?? '').trim()" :aria-label="t('hostPools.colActive')" />
+                  <input v-model="active[row.key]" type="checkbox" :disabled="!bufferText(monthly[row.key])" :aria-label="t('hostPools.colActive')" />
                 </td>
               </tr>
             </tbody>

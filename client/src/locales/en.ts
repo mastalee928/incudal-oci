@@ -821,7 +821,7 @@ export default {
             pool: {
                 badge: 'Dedicated machines',
                 title: 'Pick a region and machine type, get the whole machine',
-                description: 'Each host is sold to one customer only: all CPU, memory and bandwidth are yours, every port is open, billed monthly.',
+                description: 'Each instance gets a dedicated physical machine: all CPU, memory and bandwidth are yours, every port is open, billed monthly.',
                 regionStep: 'Choose a region',
                 machineStep: 'Choose machine type / cores',
                 diskStep: 'Choose disk',
@@ -834,12 +834,12 @@ export default {
                 createNow: 'Provision now',
                 loginToOrder: 'Sign in to provision',
                 loginHint: 'After sign-in you continue straight into provisioning with the current selection.',
-                empty: 'No products are on sale right now.',
+                empty: 'No machines are on sale right now.',
                 loadFailed: 'Could not load the catalog. Please refresh.',
                 chooseHint: 'Start by choosing a region on the left.',
                 selected: 'Your selection',
                 regionsCount: '{count} regions',
-                productsCount: '{count} products',
+                productsCount: '{count} options',
             },
             summary: {
                 total: 'Public products',
@@ -864,7 +864,7 @@ export default {
     // Wallet
     cart: {
         title: 'Cart',
-        description: 'Every line is a fully configured machine. Payment provisions the whole order at once; if any line is out of stock nothing is charged.',
+        description: 'Every line is a fully configured instance. Payment provisions the whole order at once; if any line is out of stock nothing is charged.',
         empty: 'Your cart is empty.',
         goShopping: 'Browse products',
         line: {
@@ -875,7 +875,7 @@ export default {
             remove: 'Remove',
         },
         flags: {
-            offSale: 'This product is no longer on sale. Remove it to continue.',
+            offSale: 'This option is no longer on sale. Remove it to continue.',
             priceChanged: 'Price changed to ¥{price}; payment uses the new price.',
             stockShort: 'Only {available} left in stock. Adjust the quantity.',
         },
@@ -886,8 +886,8 @@ export default {
         pay: 'Pay',
         paying: 'Paying...',
         tooMany: 'At most {max} machines per checkout. Reduce the quantity.',
-        notice: 'All or nothing: if any machine cannot be reserved, nothing is charged. Machines that fail to provision are refunded in full to your balance.',
-        success: 'Order placed, {count} machines are being provisioned',
+        notice: 'All or nothing: if any instance cannot be reserved, nothing is charged. Instances that fail to provision are refunded in full to your balance.',
+        success: 'Order placed, {count} instances are being provisioned',
         stockShortError: 'Not enough stock, nothing was charged. Remaining quantities are highlighted; adjust and retry.',
         priceChangedError: 'Prices changed, nothing was charged. Refreshed to the new prices; review and pay again.',
         nameInvalid: 'Invalid name',
@@ -1429,8 +1429,8 @@ export default {
                 total: 'Due now',
                 none: 'None',
                 idle: '{idle} available',
-                notFound: 'This product no longer exists or is off sale. Please go back and choose again.',
-                backToMarket: 'Back to catalog',
+                notFound: 'This option no longer exists or is off sale. Please go back and choose again.',
+                backToMarket: 'Back to selection',
                 selectSystem: 'Choose an OS',
                 selectSshKey: 'Choose an SSH key',
                 noImages: 'No images are available for this architecture. Please contact the administrator.',

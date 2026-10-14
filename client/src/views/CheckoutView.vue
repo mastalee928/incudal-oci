@@ -5,7 +5,7 @@
  * 打开时重新拉商品目录，逐行比对：已下架、价格变动、库存不足都提前标出来；
  * 真正的裁决在付款事务里（整单全有或全无）。允许删行、改数量、改前缀，不允许改配置。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
@@ -69,12 +69,19 @@ function findLive(poolPriceId: number): { region: PoolCatalogRegion; product: Po
 
 const rows = computed<CheckoutRow[]>(() => {
   const seenNames = new Set<string>()
+  // 同一商品可能被加进购物车多次（多行）；库存要按该商品的总需求量比对，
+  // 否则「两行各 1 台、池子只剩 1 台」会被逐行判成不缺货，付款被拒时也找不到行可提示。
+  const requestedByProduct = new Map<number, number>()
+  for (const item of cartStore.items) {
+    requestedByProduct.set(item.poolPriceId, (requestedByProduct.get(item.poolPriceId) ?? 0) + item.quantity)
+  }
   return cartStore.items.map(item => {
     const found = findLive(item.poolPriceId)
     const live = found?.product ?? null
     const unitCents = live ? live.monthlyPrice + live.setupFee : 0
     const priceChanged = !!live && (live.monthlyPrice !== item.snapshot.monthlyPrice || live.setupFee !== item.snapshot.setupFee)
     const available = serverAvailable.value[item.poolPriceId] ?? live?.idle ?? 0
+    const requested = requestedByProduct.get(item.poolPriceId) ?? item.quantity
     const names = buildPoolInstanceNames(item.namePrefix.trim(), item.quantity)
 
     let nameError = ''
@@ -92,7 +99,7 @@ const rows = computed<CheckoutRow[]>(() => {
       offSale: !live,
       priceChanged,
       available,
-      stockShort: !!live && available < item.quantity,
+      stockShort: !!live && available < requested,
       names,
       nameError,
       subtotalCents: unitCents * item.quantity
@@ -104,8 +111,23 @@ const totalQuantity = computed(() => cartStore.totalQuantity)
 const totalCents = computed(() => rows.value.reduce((sum, row) => sum + row.subtotalCents, 0))
 const maxInstances = computed(() => configStore.poolOrderMaxInstances)
 const tooMany = computed(() => totalQuantity.value > maxInstances.value)
-const blocked = computed(() => rows.value.some(row => row.offSale || row.stockShort || !!row.nameError))
-const canPay = computed(() => rows.value.length > 0 && !blocked.value && !tooMany.value && sshKeyId.value !== null && !paying.value && !loading.value)
+/** 有问题的行：已下架 / 库存不足 / 名称不合法。付款时会就地拦下并引导处理。 */
+const problemRows = computed(() => rows.value.filter(row => row.offSale || row.stockShort || !!row.nameError))
+/** 付款按钮只在「空车 / 未选密钥 / 付款中 / 加载中」时禁用；缺货等问题留给点击时就地引导。 */
+const canPay = computed(() => rows.value.length > 0 && sshKeyId.value !== null && !paying.value && !loading.value)
+
+/** 正在抖动的行 key，用于「滚到那一行并抖一下」的提示。 */
+const shakingKey = ref<string | null>(null)
+
+/** 滚到该行并左右抖一下，提醒用户处理这一行。 */
+function highlightRow(key: string): void {
+  const el = document.getElementById(`cart-row-${key}`)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  shakingKey.value = null
+  // 下一帧再设，保证连续点同一行也能重新触发动画。
+  void nextTick(() => { shakingKey.value = key })
+  window.setTimeout(() => { if (shakingKey.value === key) shakingKey.value = null }, 900)
+}
 
 async function loadCatalog(): Promise<void> {
   const response = await api.packages.getPublicCatalog()
@@ -132,6 +154,20 @@ function updateQuantity(row: CheckoutRow, value: number): void {
 
 async function pay(): Promise<void> {
   if (!canPay.value || sshKeyId.value === null) return
+
+  if (tooMany.value) {
+    error.value = t('cart.tooMany', { max: maxInstances.value })
+    return
+  }
+
+  // 缺货 / 已下架 / 名称不合法：不直接拒付，滚到第一行问题商品并抖一下，就地提示。
+  const problem = problemRows.value[0]
+  if (problem) {
+    error.value = ''
+    highlightRow(problem.item.key)
+    return
+  }
+
   paying.value = true
   error.value = ''
   try {
@@ -159,6 +195,10 @@ async function pay(): Promise<void> {
       }
       serverAvailable.value = next
       error.value = t('cart.stockShortError')
+      // 按服务端给的真实余量重算后，滚到第一行缺货商品并抖动。
+      await nextTick()
+      const firstShort = rows.value.find(row => row.stockShort)
+      if (firstShort) highlightRow(firstShort.item.key)
     } else if (code === 'POOL_PRICE_CHANGED') {
       await loadCatalog().catch(() => {})
       error.value = t('cart.priceChangedError')
@@ -192,9 +232,13 @@ async function pay(): Promise<void> {
       <div class="space-y-3">
         <div
           v-for="row in rows"
+          :id="`cart-row-${row.item.key}`"
           :key="row.item.key"
           class="card p-4 space-y-3"
-          :class="row.offSale || row.stockShort || row.nameError ? (themeStore.isDark ? 'border border-red-500/40' : 'border border-red-300') : ''"
+          :class="[
+            row.offSale || row.stockShort || row.nameError ? (themeStore.isDark ? 'border border-red-500/40' : 'border border-red-300') : '',
+            shakingKey === row.item.key ? 'cart-shake' : ''
+          ]"
         >
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0 space-y-1">
@@ -244,7 +288,7 @@ async function pay(): Promise<void> {
           </div>
 
           <p v-if="row.offSale" class="text-xs text-red-500">{{ t('cart.flags.offSale') }}</p>
-          <p v-else-if="row.stockShort" class="text-xs text-red-500">{{ t('cart.flags.stockShort', { available: row.available }) }}</p>
+          <p v-else-if="row.stockShort" class="text-xs text-red-500">{{ row.available <= 0 ? t('cart.flags.stockEmpty') : t('cart.flags.stockShort', { available: row.available }) }}</p>
           <p v-if="row.priceChanged && row.live" class="text-xs text-amber-600 dark:text-amber-400">
             {{ t('cart.flags.priceChanged', { price: formatPublicPrice(row.live.monthlyPrice + row.live.setupFee) }) }}
           </p>
@@ -278,3 +322,21 @@ async function pay(): Promise<void> {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* 缺货商品框左右抖动：付款被拦下时就地提醒用户处理这一行。 */
+@keyframes cart-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-8px); }
+  30% { transform: translateX(7px); }
+  45% { transform: translateX(-6px); }
+  60% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+.cart-shake {
+  animation: cart-shake 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cart-shake { animation: none; }
+}
+</style>

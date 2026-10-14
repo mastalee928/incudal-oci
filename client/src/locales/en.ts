@@ -901,6 +901,7 @@ export default {
             offSale: 'This option is no longer on sale. Remove it to continue.',
             priceChanged: 'Price changed to ¥{price}; payment uses the new price.',
             stockShort: 'Only {available} left in stock. Adjust the quantity.',
+            stockEmpty: 'Out of stock — remove this line.',
         },
         sshKey: 'SSH key (shared by the whole order)',
         noSshKey: 'Add an SSH key in your profile first.',

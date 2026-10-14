@@ -910,6 +910,7 @@ export default {
             offSale: '此配置已下架，請移除後再付款。',
             priceChanged: '價格已變為 ¥{price}，付款按新價計算。',
             stockShort: '庫存只剩 {available} 台，請調整數量。',
+            stockEmpty: '該台已無庫存，請移除此列。',
         },
         sshKey: 'SSH 金鑰（整單共用）',
         noSshKey: '請先在個人設定裡新增 SSH 金鑰。',

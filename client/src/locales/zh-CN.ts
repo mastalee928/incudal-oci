@@ -901,6 +901,7 @@ export default {
             offSale: '该配置已下架，请移除后再付款。',
             priceChanged: '价格已变为 ¥{price}，付款按新价计算。',
             stockShort: '库存只剩 {available} 台，请调整数量。',
+            stockEmpty: '该台已无库存，请移除此行。',
         },
         sshKey: 'SSH 密钥（整单共用）',
         noSshKey: '请先在个人设置里添加 SSH 密钥。',

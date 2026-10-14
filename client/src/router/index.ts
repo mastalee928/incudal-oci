@@ -140,7 +140,7 @@ const routes: RouteRecordRaw[] = [
     path: '/checkout',
     name: 'checkout',
     component: () => import('@/views/CheckoutView.vue'),
-    meta: { requiresAuth: true, requiresUser: true, titleKey: 'cart.title', title: '购物车' }
+    meta: { requiresAuth: true, titleKey: 'cart.title', title: '购物车' }
   },
   {
     path: '/instances/:id',

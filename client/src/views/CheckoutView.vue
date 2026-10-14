@@ -45,6 +45,11 @@ const error = ref('')
 const sshKeyId = ref<number | null>(null)
 /** 付款被拒后服务端给出的真实余量，覆盖目录里的数字 */
 const serverAvailable = ref<Record<number, number>>({})
+/** 认证方式：整单共用。key = 选一把 SSH 密钥；password = 系统生成 root 密码。 */
+const authMode = ref<'key' | 'password'>('key')
+/** 付款成功后的凭据：密码模式显示 root 密码与 SSH 端口，密钥模式只提示。 */
+const credentials = ref<{ passwordMode: boolean; lines: Array<{ id: number; name: string; host: string; sshPort: number | null; rootPassword: string | null }> } | null>(null)
+const copied = ref<number | null>(null)
 
 interface CheckoutRow {
   item: CartItem
@@ -114,7 +119,7 @@ const tooMany = computed(() => totalQuantity.value > maxInstances.value)
 /** 有问题的行：已下架 / 库存不足 / 名称不合法。付款时会就地拦下并引导处理。 */
 const problemRows = computed(() => rows.value.filter(row => row.offSale || row.stockShort || !!row.nameError))
 /** 付款按钮只在「空车 / 未选密钥 / 付款中 / 加载中」时禁用；缺货等问题留给点击时就地引导。 */
-const canPay = computed(() => rows.value.length > 0 && sshKeyId.value !== null && !paying.value && !loading.value)
+const canPay = computed(() => rows.value.length > 0 && (authMode.value === 'password' || sshKeyId.value !== null) && !paying.value && !loading.value)
 
 /** 正在抖动的行 key，用于「滚到那一行并抖一下」的提示。 */
 const shakingKey = ref<string | null>(null)
@@ -153,7 +158,7 @@ function updateQuantity(row: CheckoutRow, value: number): void {
 }
 
 async function pay(): Promise<void> {
-  if (!canPay.value || sshKeyId.value === null) return
+  if (!canPay.value) return
 
   if (tooMany.value) {
     error.value = t('cart.tooMany', { max: maxInstances.value })
@@ -179,12 +184,19 @@ async function pay(): Promise<void> {
         image: row.item.image,
         customInitCommandIds: row.item.customInitCommandIds.length > 0 ? row.item.customInitCommandIds : undefined
       })),
-      sshKeyId: sshKeyId.value,
+      sshKeyId: authMode.value === 'key' ? sshKeyId.value ?? undefined : undefined,
       expectedTotal: totalCents.value
     })
     cartStore.clear()
     toast.success(t('cart.success', { count: result.instances.length }))
-    router.push('/instances')
+    // 密码模式下把 root 密码摆到用户眼前；密钥模式只提示已按所选密钥开通。
+    credentials.value = {
+      passwordMode: authMode.value === 'password',
+      lines: result.instances.map(entry => ({
+        id: entry.id, name: entry.name, host: entry.host, sshPort: entry.sshPort,
+        rootPassword: authMode.value === 'password' ? entry.rootPassword : null
+      }))
+    }
   } catch (err: any) {
     const data = err?.response?.data ?? err
     const code = data?.code
@@ -208,6 +220,20 @@ async function pay(): Promise<void> {
   } finally {
     paying.value = false
   }
+}
+
+async function copyCredential(line: { id: number; rootPassword: string | null }): Promise<void> {
+  if (!line.rootPassword) return
+  try {
+    await navigator.clipboard.writeText(line.rootPassword)
+    copied.value = line.id
+    window.setTimeout(() => { if (copied.value === line.id) copied.value = null }, 1500)
+  } catch { /* clipboard unavailable */ }
+}
+
+function finishCredentials(): void {
+  credentials.value = null
+  void router.push('/instances')
 }
 </script>
 
@@ -298,13 +324,34 @@ async function pay(): Promise<void> {
 
       <div class="card p-5 space-y-4">
         <div class="grid gap-3 sm:grid-cols-2">
-          <label class="text-sm text-themed-secondary">
-            {{ t('cart.sshKey') }}
-            <select v-model="sshKeyId" class="input w-full mt-1" :disabled="sshKeys.length === 0">
-              <option v-for="key in sshKeys" :key="key.id" :value="key.id">{{ key.name || `#${key.id}` }}</option>
-            </select>
-            <span v-if="sshKeys.length === 0" class="block mt-1 text-xs text-red-500">{{ t('cart.noSshKey') }}</span>
-          </label>
+          <div class="space-y-2">
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-2 text-sm transition-colors"
+                :class="authMode === 'key' ? 'border-blue-500 text-themed' : 'border-themed text-themed-muted'"
+                @click="authMode = 'key'"
+              >
+                {{ t('publicSite.market.pool.authKey') }}
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-2 text-sm transition-colors"
+                :class="authMode === 'password' ? 'border-blue-500 text-themed' : 'border-themed text-themed-muted'"
+                @click="authMode = 'password'"
+              >
+                {{ t('publicSite.market.pool.authPassword') }}
+              </button>
+            </div>
+            <label v-if="authMode === 'key'" class="block text-sm text-themed-secondary">
+              {{ t('cart.sshKey') }}
+              <select v-model="sshKeyId" class="input w-full mt-1" :disabled="sshKeys.length === 0">
+                <option v-for="key in sshKeys" :key="key.id" :value="key.id">{{ key.name || `#${key.id}` }}</option>
+              </select>
+              <span v-if="sshKeys.length === 0" class="block mt-1 text-xs text-red-500">{{ t('cart.noSshKey') }}</span>
+            </label>
+            <p v-else class="text-xs text-themed-muted">{{ t('publicSite.market.pool.authPasswordHint') }}</p>
+          </div>
           <div class="text-right">
             <div class="text-xs text-themed-muted">{{ t('cart.count', { count: totalQuantity }) }}</div>
             <div class="text-sm text-themed-muted mt-1">{{ t('cart.total') }}</div>
@@ -321,6 +368,28 @@ async function pay(): Promise<void> {
       </div>
     </template>
   </div>
+
+  <!-- 付款成功后的凭据：密码模式展示 root 密码，密钥模式只提示 -->
+  <Teleport to="body">
+    <div v-if="credentials" class="modal-overlay" @keydown.esc="finishCredentials">
+      <div class="modal-backdrop" @click="finishCredentials"></div>
+      <section class="modal-content" role="dialog" aria-modal="true">
+        <div class="modal-header"><h2 class="modal-title">{{ t('publicSite.market.pool.credsTitle') }}</h2></div>
+        <div class="modal-body space-y-3">
+          <p v-if="!credentials.passwordMode" class="text-sm text-themed">{{ t('publicSite.market.pool.credsKeyMode') }}</p>
+          <div v-for="line in credentials.lines" :key="line.id" class="rounded-lg border border-themed p-3 space-y-1">
+            <div class="text-sm font-medium text-themed">{{ line.name }} <span class="text-themed-muted">· {{ line.host }}</span></div>
+            <div class="text-xs text-themed-muted">{{ t('publicSite.market.pool.credsPort') }}: <span class="font-mono text-themed">{{ line.sshPort ?? 22 }}</span></div>
+            <div v-if="line.rootPassword" class="flex items-center justify-between gap-2 text-xs">
+              <span class="text-themed-muted">{{ t('publicSite.market.pool.credsPassword') }}: <span class="font-mono text-themed break-all">{{ line.rootPassword }}</span></span>
+              <button type="button" class="btn-secondary text-xs whitespace-nowrap" @click="copyCredential(line)">{{ copied === line.id ? t('publicSite.market.pool.credsCopied') : t('publicSite.market.pool.credsCopy') }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn-primary" @click="finishCredentials">{{ t('publicSite.market.pool.credsViewInstances') }}</button></div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>

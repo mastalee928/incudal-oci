@@ -910,7 +910,7 @@ export default {
         pay: 'Pay',
         paying: 'Paying...',
         tooMany: 'At most {max} machines per checkout. Reduce the quantity.',
-        notice: 'All or nothing: if any instance cannot be reserved, nothing is charged. Instances that fail to provision are refunded in full to your balance.',
+        notice: 'Payment reserves every line at once: if any machine is out of stock, the whole order is cancelled and nothing is charged. If a machine fails to provision after payment, that machine is refunded in full and the rest keep running.',
         success: 'Order placed, {count} instances are being provisioned',
         stockShortError: 'Not enough stock, nothing was charged. Remaining quantities are highlighted; adjust and retry.',
         priceChangedError: 'Prices changed, nothing was charged. Refreshed to the new prices; review and pay again.',

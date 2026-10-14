@@ -168,8 +168,8 @@ onUnmounted(() => {
             </svg>
           </button>
 
-          <!-- 购物车 -->
-          <CartButton v-if="!authStore.isAdmin" />
+          <!-- 购物车：所有登录用户都显示（管理员也用来试买） -->
+          <CartButton v-if="authStore.isAuthenticated" />
 
           <!-- 站内信铃铛 -->
           <NotificationBell />

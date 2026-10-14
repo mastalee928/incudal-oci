@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
+import CartButton from '@/components/CartButton.vue'
 import { supportedLocales, setLocale, type Locale } from '@/locales'
 
 const route = useRoute()
@@ -211,6 +212,9 @@ onUnmounted(() => {
         </div>
 
         <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <!-- 购物车：登录后显示，角标随加购更新 -->
+          <CartButton v-if="authStore.isAuthenticated" />
+
           <button
             class="group relative rounded-lg p-2.5 transition-colors duration-150"
             :class="ui.iconButton"

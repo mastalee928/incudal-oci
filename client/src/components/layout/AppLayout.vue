@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -13,11 +13,8 @@ import NotificationBell from '@/components/NotificationBell.vue'
 import CartButton from '@/components/CartButton.vue'
 
 const router = useRouter()
-const route = useRoute()
 const { locale } = useI18n()
 
-// 分栏布局页面：左栏独立滚动，右栏固定
-const isSplitPane = computed(() => route.name === 'instance-create')
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const inboxStore = useInboxStore()
@@ -342,8 +339,8 @@ onUnmounted(() => {
       </header>
 
       <!-- 页面内容 -->
-      <main class="flex-1 p-4 md:p-6 xl:px-14 2xl:px-24" :class="isSplitPane ? 'overflow-auto lg:overflow-hidden' : 'overflow-auto'">
-        <div class="w-full mx-auto" :class="isSplitPane ? 'lg:h-full' : ''">
+      <main class="flex-1 p-4 md:p-6 xl:px-14 2xl:px-24 overflow-auto">
+        <div class="w-full mx-auto">
           <slot />
         </div>
       </main>

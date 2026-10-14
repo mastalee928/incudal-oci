@@ -150,6 +150,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                     where: {
                         id: packageId,
                         active: true,
+                        hidden: false,
                         globalShared: true
                     },
                     select: {
@@ -648,7 +649,7 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                         return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                     }
                     const pkg = await db.prisma.package.findFirst({
-                        where: { id: packageId, active: true, globalShared: true },
+                        where: { id: packageId, active: true, hidden: false, globalShared: true },
                         select: { id: true }
                     })
                     if (!pkg) {

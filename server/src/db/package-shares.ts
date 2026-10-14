@@ -563,6 +563,7 @@ export async function getGlobalSharedPackages(): Promise<SharedPackageInfo[]> {
         where: {
             globalShared: true,
             active: true,
+            hidden: false,  // 影子套餐（池子定价自动生成）不出现在任何界面
             // 不再排除用户自己的套餐，允许展示
             user: {
                 role: 'admin'  // 只返回管理员创建的套餐（官方套餐）

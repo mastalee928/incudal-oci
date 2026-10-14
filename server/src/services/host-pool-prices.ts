@@ -7,11 +7,18 @@ import { lockHostGroups } from './host-groups.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
 
-/** 影子套餐名。Package 上有 @@unique([userId, name])，加前缀避免与真实套餐重名。 */
-const shadowPackageName = (preset: string) => `[池子] ${preset}`
+/**
+ * 影子套餐名（客户可见）：独立机型 E2 / 独立机型 ARM2C。
+ * Package 上有 @@unique([userId, name])；查找只认 hidden=true 的行，不会串到真实套餐。
+ */
+const shadowPackageName = (preset: string) => `独立机型 ${preset}`
+/** 迁移前的旧名，仅用于兜底查找尚未改名的历史行。 */
+const legacyShadowPackageName = (preset: string) => `[池子] ${preset}`
 
-/** 影子方案名。PackagePlan 上有 @@unique([packageId, name])，用价格行 ID 保证唯一。 */
-const shadowPlanName = (poolPriceId: number) => `池子 #${poolPriceId}`
+/** 影子方案名（客户可见）：地区 · 磁盘档，如「美国西部（圣何塞） · 30G」。 */
+const shadowPlanName = (regionName: string, diskGiB: number) => `${regionName} · ${diskGiB}G`
+/** 迁移前的旧名，仅用于兜底查找尚未关联 shadowPlanId 的历史行。 */
+const legacyShadowPlanName = (poolPriceId: number) => `池子 #${poolPriceId}`
 
 /**
  * 「事实无限」的流量占位值：1 EiB。
@@ -54,14 +61,17 @@ function validateInput(input: PoolPriceInput): void {
 }
 
 /**
- * 影子套餐：每个「核心数预设」一条，hidden=true，不出现在任何界面。
+ * 影子套餐：每个「核心数预设」一条，hidden=true，不出现在任何套餐选择界面；
+ * 实例详情等只读位置显示客户可读名（独立机型 E2）。
  * 它存在的唯一理由是让 Instance.packageId 与既有计费/优惠券/统计逻辑继续工作。
  * 只按预设索引、不含机型分组：机型分组对下游没有任何影响。
  */
 async function ensureShadowPackage(tx: DbClient, preset: ResourcePreset, ownerId: number, diskGiB: number) {
   const name = shadowPackageName(preset)
   // 按名称查找而不是按所有者：两个管理员先后保存同一个预设时不应各建一条。
+  // 兜底迁移前的旧名（[池子] X）：找到就顺手改成客户可读的新名。
   const existing = await tx.package.findFirst({ where: { name, hidden: true } })
+    ?? await tx.package.findFirst({ where: { name: legacyShadowPackageName(preset), hidden: true } })
   const quota = presetQuota(preset)
   // cpuMax / memoryMax / diskMax 只在「没有方案」的免费套餐路径上生效；
   // 影子套餐永远配有方案，所以这三个值对实例没有影响，仅为满足非空约束。
@@ -81,18 +91,34 @@ async function ensureShadowPackage(tx: DbClient, preset: ResourcePreset, ownerId
     // 旧的市场接口因此要过滤 hidden，避免影子套餐漏进旧页面。
     globalShared: true
   }
-  if (existing) return tx.package.update({ where: { id: existing.id }, data })
-  return tx.package.create({ data: { userId: ownerId, name, description: '系统生成的池子套餐，不对用户展示', ...data } })
+  if (existing) return tx.package.update({ where: { id: existing.id }, data: { ...data, name } })
+  return tx.package.create({ data: { userId: ownerId, name, description: '系统生成的计费套餐，不对用户展示', ...data } })
 }
 
 /**
  * 影子方案：每个池子行一条，价格与初装费直接镜像自定价表。
  * 创建路径只读方案，所以这里的每个字段都必须是「一机一卖下的正确值」。
+ * 客户可读名 = 地区 · 磁盘档；与价格行通过 shadowPlanId 精确关联（不靠名字）。
  */
-async function ensureShadowPlan(tx: DbClient, packageId: number, row: { id: number; resourcePreset: string; diskGiB: number; monthlyPrice: Prisma.Decimal; setupFee: Prisma.Decimal }) {
+async function ensureShadowPlan(
+  tx: DbClient,
+  packageId: number,
+  row: { id: number; resourcePreset: string; diskGiB: number; monthlyPrice: Prisma.Decimal; setupFee: Prisma.Decimal; shadowPlanId: number | null },
+  regionName: string,
+  machineName: string
+) {
   const quota = presetQuota(row.resourcePreset as ResourcePreset)
-  const name = shadowPlanName(row.id)
+  // 同一套餐内重名（例如同机型分组下有同名地区组）时依次补机型分组、价格行号区分，
+  // 保证 (packageId, name) 唯一约束下每次都能落一个稳定、客户可读的名字。
+  const baseName = shadowPlanName(regionName, row.diskGiB)
+  const candidates = [baseName, `${baseName} · ${machineName}`, `${baseName} · ${machineName} ${row.id}`]
+  let name = candidates[candidates.length - 1]
+  for (const candidate of candidates) {
+    const clash = await tx.packagePlan.findFirst({ where: { packageId, name: candidate }, select: { id: true } })
+    if (!clash || clash.id === row.shadowPlanId) { name = candidate; break }
+  }
   const data = {
+    name,
     cpu: quota.cpuAllowanceMax,
     memory: quota.memoryMax,
     disk: row.diskGiB * 1024, // 实例侧磁盘单位是 MiB
@@ -112,9 +138,11 @@ async function ensureShadowPlan(tx: DbClient, packageId: number, row: { id: numb
     isSoldOut: false,
     sortOrder: 0
   }
-  const existing = await tx.packagePlan.findFirst({ where: { packageId, name } })
+  const existing = row.shadowPlanId
+    ? await tx.packagePlan.findUnique({ where: { id: row.shadowPlanId } })
+    : await tx.packagePlan.findFirst({ where: { packageId, name: legacyShadowPlanName(row.id) } })
   if (existing) return tx.packagePlan.update({ where: { id: existing.id }, data })
-  return tx.packagePlan.create({ data: { packageId, name, ...data } })
+  return tx.packagePlan.create({ data: { packageId, ...data } })
 }
 
 /**
@@ -155,7 +183,11 @@ async function writePoolPrice(tx: DbClient, input: PoolPriceInput, ownerId: numb
   })
 
   const shadowPackage = await ensureShadowPackage(tx, input.resourcePreset, ownerId, input.diskGiB)
-  await ensureShadowPlan(tx, shadowPackage.id, saved)
+  const shadowPlan = await ensureShadowPlan(tx, shadowPackage.id, saved, region.name, machine.name)
+  // 把影子方案挂到价格行上：下单解析按 ID 精确取，改名/换地区都不受影响。
+  if (saved.shadowPlanId !== shadowPlan.id) {
+    await tx.hostPoolPrice.update({ where: { id: saved.id }, data: { shadowPlanId: shadowPlan.id } })
+  }
   return saved.id
 }
 
@@ -192,8 +224,13 @@ export async function deletePoolPrice(id: number) {
     await lockHostGroups(tx)
     const row = await tx.hostPoolPrice.findUnique({ where: { id } })
     if (!row) throw new OnboardingError('POOL_PRICE_NOT_FOUND')
-    const shadowPackage = await tx.package.findFirst({ where: { name: shadowPackageName(row.resourcePreset), hidden: true } })
-    if (shadowPackage) await tx.packagePlan.deleteMany({ where: { packageId: shadowPackage.id, name: shadowPlanName(id) } })
+    if (row.shadowPlanId) {
+      await tx.packagePlan.deleteMany({ where: { id: row.shadowPlanId } })
+    } else {
+      // 迁移前创建的旧行：按旧名兜底。
+      const shadowPackage = await tx.package.findFirst({ where: { hidden: true, name: { in: [shadowPackageName(row.resourcePreset), legacyShadowPackageName(row.resourcePreset)] } } })
+      if (shadowPackage) await tx.packagePlan.deleteMany({ where: { packageId: shadowPackage.id, name: legacyShadowPlanName(id) } })
+    }
     await tx.hostPoolPrice.delete({ where: { id } })
     return { success: true }
   })
@@ -209,8 +246,12 @@ export async function resolvePoolProduct(poolPriceId: number) {
   const price = await prisma.hostPoolPrice.findUnique({ where: { id: poolPriceId } })
   if (!price || !price.active) return null
   const shadowPackage = await prisma.package.findFirst({ where: { name: shadowPackageName(price.resourcePreset), hidden: true } })
+    ?? await prisma.package.findFirst({ where: { name: legacyShadowPackageName(price.resourcePreset), hidden: true } })
   if (!shadowPackage) return null
-  const shadowPlan = await prisma.packagePlan.findFirst({ where: { packageId: shadowPackage.id, name: shadowPlanName(price.id) } })
+  // 优先按 shadowPlanId 精确关联；迁移前的旧行按旧名兜底。
+  const shadowPlan = price.shadowPlanId
+    ? await prisma.packagePlan.findUnique({ where: { id: price.shadowPlanId } })
+    : await prisma.packagePlan.findFirst({ where: { packageId: shadowPackage.id, name: legacyShadowPlanName(price.id) } })
   if (!shadowPlan) return null
   return { price, packageId: shadowPackage.id, planId: shadowPlan.id }
 }

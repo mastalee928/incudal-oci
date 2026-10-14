@@ -825,6 +825,8 @@ model HostPoolPrice {
   monthlyPrice   Decimal  @map("monthly_price") @db.Decimal(10, 2)
   setupFee       Decimal  @default(0) @map("setup_fee") @db.Decimal(10, 2) // 一次性初装费（分），0 = 不收
   active         Boolean  @default(true)
+  // 影子方案（PackagePlan）ID：下单解析按它精确取方案，不再依赖名字里带 ID。
+  shadowPlanId   Int?     @map("shadow_plan_id")
   sortOrder      Int      @default(0) @map("sort_order")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")

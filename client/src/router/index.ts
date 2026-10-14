@@ -128,17 +128,11 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'nav.createInstance',
       title: '创建实例',
       prefetch: () => {
-        const authStore = useAuthStore()
+        // 创建实例页就是池子向导：只预取公开配置与 SSH 密钥，目录由向导自己加载。
         const configStore = useConfigStore()
         const resourcesStore = useInstanceResourcesStore()
         configStore.loadPublicConfig()
-        Promise.all([
-          api.packages.list({ source: 'official' }),
-          api.packages.getRegions({ source: 'official' }),
-          api.users.get(authStore.user!.id),
-          resourcesStore.loadSshKeys(),
-          configStore.hostingMarketEntryEnabled ? resourcesStore.loadHostingZones() : Promise.resolve()
-        ]).catch(() => {})
+        resourcesStore.loadSshKeys()
       }
     }
   },

@@ -3056,6 +3056,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     // 官方/托管市场/托管专区：使用统一公开套餐逻辑
     let whereCondition: any = {
       active: true,
+      hidden: false,
       plans: {
         some: {
           isActive: true

@@ -163,7 +163,8 @@ export async function getAllPackages(
   const { userId, excludeUserId, ownerRole, includeOwnerEmail = false } = options
 
   // 构建查询条件
-  const whereCondition: any = {}
+  // 影子套餐（池子定价自动生成，hidden=true）不出现在任何界面。
+  const whereCondition: any = { hidden: false }
 
   if (activeOnly) {
     whereCondition.active = true
